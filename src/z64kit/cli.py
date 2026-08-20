@@ -22,6 +22,7 @@ import argparse
 import datetime
 import hashlib
 import json
+import struct
 import sys
 from pathlib import Path
 
@@ -41,6 +42,7 @@ from . import (
 )
 from .fat import image, writer
 from .report import catalogue, latex, render
+from .rom import header
 
 
 def _today() -> str:
@@ -119,15 +121,54 @@ def _patch_library(folder: str | None) -> dict[bytes, list[tuple[str, str, bytes
 
     index: dict[bytes, list[tuple[str, str, bytes]]] = {}
     for stem, (extension, blob) in payloads.items():
-        key = headers.get(stem)
-        if key is None and blob[:5] == b"APS10":
-            key = None
-        if key is None or len(key) != 64:
+        key = _binding_key(headers.get(stem), blob)
+        if key is None:
             continue
         entries = [(stem, extension, blob)]
         entries += [(stem, ext, data) for ext, data in extras.get(stem, ())]
-        index[bytes(key)] = entries
+        index[key] = entries
     return index
+
+
+def _crc_key(crc1: int, crc2: int) -> bytes:
+    """The weaker binding an APS carries: the target checksum pair alone."""
+    return b"crc:" + struct.pack(">II", crc1, crc2)
+
+
+def _binding_key(sidecar: bytes | None, payload: bytes) -> bytes | None:
+    """What this patch binds to, preferring a header sidecar over stored checksums.
+
+    A `.hdr` gives the full 64 bytes and is normalised to big endian first, so a
+    byteswapped sidecar still matches the ROM it describes. An APS carries only the
+    target checksum pair, which is enough to bind it exactly and is the binding the
+    format itself uses. Requiring a sidecar for those discarded every one of them.
+    """
+    if sidecar is not None:
+        normalised = header.identity_key(sidecar)
+        if normalised is not None:
+            return normalised
+    if payload[: len(aps.MAGIC)] == aps.MAGIC:
+        try:
+            parsed = aps.parse(payload)
+        except aps.FormatError:
+            return None
+        return _crc_key(parsed.crc1, parsed.crc2)
+    return None
+
+
+def _patches_for(library: dict, game) -> list[tuple[str, str, bytes]]:
+    """Look a game up by full header first, then by the checksum pair alone.
+
+    Both keys come from the already parsed header, so this touches no files.
+    """
+    found = library.get(game.identity_key)
+    if found is not None:
+        return found
+    try:
+        pair = _crc_key(int(game.crc1, 16), int(game.crc2, 16))
+    except ValueError:
+        return []
+    return library.get(pair, [])
 
 
 def _scan_or_exit(root: str) -> scan.Collection:
@@ -253,7 +294,7 @@ def cmd_build(args) -> int:
                     companion.extension,
                     Path(companion.path).read_bytes(),
                 )
-            for stem, extension, blob in patches.get(game.identity_key, ()):
+            for stem, extension, blob in _patches_for(patches, game):
                 spot = volume.add_file(writer.ROOT, base, extension, blob)
                 placed.append({"source": f"{stem}.{extension.lower()}", "name": spot.name})
         volume.sort_directories()
@@ -305,7 +346,7 @@ def cmd_organise(args) -> int:
                 mate = folder / f"{base}.{companion.extension}"
                 mate.write_bytes(Path(companion.path).read_bytes())
                 written.append({"source": companion.filename, "name": mate.name})
-            for stem, extension, blob in patches.get(game.identity_key, ()):
+            for stem, extension, blob in _patches_for(patches, game):
                 mate = folder / f"{base}.{extension}"
                 mate.write_bytes(blob)
                 written.append({"source": f"{stem}.{extension.lower()}", "name": mate.name})
@@ -543,14 +584,31 @@ def _cmd_vi_patch(args, requests) -> int:
     return 0
 
 
-def _report_artifact_folder(folder: Path, manifest) -> None:
+def _collection_checksums(source: str | None) -> set[tuple[str, str]] | None:
+    """The checksum pair of every game found, or None when no collection was named."""
+    if not source:
+        return None
+    found = scan.scan(source)
+    return {(g.crc1, g.crc2) for g in found.games}
+
+
+def _report_artifact_folder(folder: Path, manifest, source: str | None = None) -> None:
     """Print the folder's state. Shared with `artifacts` so the two cannot disagree."""
-    report = artifacts.inspect_folder(folder, manifest)
+    checksums = _collection_checksums(source)
+    required = None if checksums is None else artifacts.required_for(manifest, checksums)
+    report = artifacts.inspect_folder(folder, manifest, required=required)
     wanted = artifacts.folder_entries(manifest)
+    if required is not None:
+        wanted = [e for e in wanted if e.filename in required]
     by_name = {e.filename: e for e in wanted}
 
     print(f"\nsupplied files    {folder}")
-    print(f"                  {len(report.present)} of {len(wanted)} verified")
+    if source:
+        print(f"                  {len(wanted)} needed by the games in {source}")
+    print(f"                  {len(report.needed_present)} of {len(report.needed)} verified")
+    spare = len(report.present) - len(report.needed_present)
+    if spare:
+        print(f"                  {spare} more verified, for games not in this collection")
 
     if report.missing:
         print(f"\n  missing ({len(report.missing)}). Put these in {folder}:")
@@ -600,7 +658,9 @@ def cmd_doctor(args) -> int:
         f"granularity         {packing.units_for_capacity(image.usable_capacity())} games per disk"
     )
 
-    _report_artifact_folder(Path(args.folder or artifacts.FOLDER_NAME), manifest)
+    _report_artifact_folder(
+        Path(args.folder or artifacts.FOLDER_NAME), manifest, getattr(args, "source", None)
+    )
     return 0
 
 
@@ -616,8 +676,12 @@ def cmd_artifacts(args) -> int:
         print(f"wrote {target}")
         return 0
 
-    report = artifacts.inspect_folder(folder, manifest)
+    checksums = _collection_checksums(getattr(args, "source", None))
+    required = None if checksums is None else artifacts.required_for(manifest, checksums)
+    report = artifacts.inspect_folder(folder, manifest, required=required)
     wanted = artifacts.folder_entries(manifest)
+    if required is not None:
+        wanted = [e for e in wanted if e.filename in required]
 
     if args.json:
         print(
@@ -638,7 +702,10 @@ def cmd_artifacts(args) -> int:
         return 0 if report.complete else 1
 
     print(f"folder   {folder}")
-    print(f"expected {len(wanted)} files, {len(report.present)} verified")
+    print(f"expected {len(report.needed)} files, {len(report.needed_present)} verified")
+    spare = len(report.present) - len(report.needed_present)
+    if spare:
+        print(f"         {spare} more verified, for games not in this collection")
 
     if report.missing:
         print(f"\nmissing ({len(report.missing)})")
@@ -813,6 +880,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     art.add_argument("--json", action="store_true")
     art.add_argument(
+        "--source",
+        default=None,
+        help="only require the files the games in this folder actually need",
+    )
+    art.add_argument(
         "--write-readme", action="store_true", help="regenerate the folder's documentation"
     )
     art.set_defaults(func=cmd_artifacts)
@@ -827,6 +899,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--folder",
         default=None,
         help=f"where the supplied files live, default {artifacts.FOLDER_NAME}/",
+    )
+    doc.add_argument(
+        "--source",
+        default=None,
+        help="only require the files the games in this folder actually need",
     )
     doc.set_defaults(func=cmd_doctor)
 

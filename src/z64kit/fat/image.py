@@ -189,6 +189,9 @@ def empty_root(label: str) -> bytes:
     root = bytearray(root_sectors() * SECTOR)
     root[0:11] = _label_bytes(label)
     root[11] = ATTR_VOLUME_LABEL
+    struct.pack_into("<H", root, 14, TZ_TIME)
+    struct.pack_into("<H", root, 16, TZ_DATE)
+    struct.pack_into("<H", root, 18, TZ_DATE)
     struct.pack_into("<H", root, 22, TZ_TIME)
     struct.pack_into("<H", root, 24, TZ_DATE)
     return bytes(root)

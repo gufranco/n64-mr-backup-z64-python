@@ -181,6 +181,9 @@ class Volume:
         raw = bytearray(ENTRY_SIZE)
         raw[0:11] = name
         raw[11] = attributes
+        struct.pack_into("<H", raw, 14, image.TZ_TIME)
+        struct.pack_into("<H", raw, 16, image.TZ_DATE)
+        struct.pack_into("<H", raw, 18, image.TZ_DATE)
         struct.pack_into("<H", raw, 22, image.TZ_TIME)
         struct.pack_into("<H", raw, 24, image.TZ_DATE)
         struct.pack_into("<H", raw, 26, cluster)

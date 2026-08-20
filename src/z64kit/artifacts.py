@@ -46,6 +46,9 @@ class ArtifactEntry:
     game: str | None = None
     description: str | None = None
     companions: tuple[str, ...] = ()
+    region: str | None = None
+    game_code: str | None = None
+    checksum_after: str | None = None
 
 
 @dataclass(frozen=True)
@@ -84,6 +87,9 @@ def _entry_from_dict(item: dict) -> ArtifactEntry:
             game=item.get("game"),
             description=item.get("description"),
             companions=tuple(item.get("companions", ())),
+            region=item.get("region"),
+            game_code=item.get("game_code"),
+            checksum_after=item.get("checksum_after"),
         )
     except KeyError as exc:
         raise ManifestError(f"entry is missing required field {exc.args[0]!r}") from exc
@@ -202,6 +208,12 @@ def entry_to_dict(entry: ArtifactEntry) -> dict:
         out["description"] = entry.description
     if entry.companions:
         out["companions"] = list(entry.companions)
+    if entry.region:
+        out["region"] = entry.region
+    if entry.game_code:
+        out["game_code"] = entry.game_code
+    if entry.checksum_after:
+        out["checksum_after"] = entry.checksum_after
     return out
 
 
@@ -216,7 +228,7 @@ def write_manifest(entries: list[ArtifactEntry], path: Path | str, note: str) ->
     )
 
 
-FOLDER_KINDS = ("patch", "save")
+FOLDER_KINDS = ("patch", "crack", "save", "header")
 FOLDER_OWN_FILES = ("README.md", ".gitignore")
 FOLDER_NAME = "patches"
 
@@ -228,10 +240,22 @@ class FolderReport:
     wrong: dict[str, str] = field(default_factory=dict)
     misnamed: dict[str, str] = field(default_factory=dict)
     unknown: tuple[str, ...] = ()
+    needed: tuple[str, ...] = ()
 
     @property
     def complete(self) -> bool:
         return not self.missing and not self.wrong
+
+    @property
+    def needed_present(self) -> tuple[str, ...]:
+        """Verified files this collection actually asked for.
+
+        `present` counts everything that verified, including files kept for games
+        the reader does not own. Only this narrower count belongs in a ratio
+        against `needed`.
+        """
+        wanted = set(self.needed)
+        return tuple(name for name in self.present if name in wanted)
 
 
 def folder_entries(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
@@ -245,14 +269,41 @@ def other_entries(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
     return tuple(sorted(chosen, key=lambda e: e.filename))
 
 
-def inspect_folder(folder: Path | str, manifest: Manifest) -> FolderReport:
+def required_for(manifest: Manifest, checksums: set[tuple[str, str]]) -> set[str]:
+    """The files a collection actually needs, given the checksums it holds.
+
+    The manifest describes every patch known for the platform, and most of them
+    are for games the reader does not own. Reporting all of those as missing buries
+    the handful that matter, so a caller that knows the collection passes its
+    checksum pairs and gets back only the relevant filenames, companions included.
+    """
+    pairs = {(a.upper(), b.upper()) for a, b in checksums}
+    out: set[str] = set()
+    for entry in manifest.entries():
+        if not (entry.target_crc1 and entry.target_crc2):
+            continue
+        if (entry.target_crc1.upper(), entry.target_crc2.upper()) not in pairs:
+            continue
+        out.add(entry.filename)
+        out.update(entry.companions)
+    return out
+
+
+def inspect_folder(
+    folder: Path | str, manifest: Manifest, required: set[str] | None = None
+) -> FolderReport:
     """Compare a folder against the manifest, deciding on SHA-256 alone.
 
     A missing folder is reported as everything missing rather than raised, because
     the answer a caller wants is the same either way: none of it is here yet.
+
+    `required` narrows what counts as missing. A file present but wrong is always
+    reported, whether or not this collection needs it, because a wrong file is a
+    problem regardless of who wants it.
     """
     root = Path(folder)
     wanted = {e.filename: e for e in folder_entries(manifest)}
+    needed = set(wanted) if required is None else set(required) & set(wanted)
     present: list[str] = []
     missing: list[str] = []
     wrong: dict[str, str] = {}
@@ -279,7 +330,7 @@ def inspect_folder(folder: Path | str, manifest: Manifest) -> FolderReport:
         else:
             wrong[path.name] = result.reason
 
-    for name in wanted:
+    for name in needed:
         if name not in present and name not in wrong:
             missing.append(name)
 
@@ -289,6 +340,7 @@ def inspect_folder(folder: Path | str, manifest: Manifest) -> FolderReport:
         wrong=wrong,
         misnamed=misnamed,
         unknown=tuple(sorted(unknown)),
+        needed=tuple(sorted(needed)),
     )
 
 
@@ -328,102 +380,161 @@ def render_folder_readme(manifest: Manifest) -> str:
     Nothing here says where to obtain a file. The point of the document is to let
     somebody confirm that what they already have is the right thing, and to name
     exactly what is wrong when it is not.
+
+    Rows are grouped by what a file does rather than listed flat, because the
+    reader's question is almost never "what is the digest of this byte count", it
+    is "do I need this at all".
     """
     wanted = folder_entries(manifest)
     others = other_entries(manifest)
+    by_kind = {kind: [e for e in wanted if e.kind == kind] for kind in FOLDER_KINDS}
+    games = len({e.game_code for e in wanted if e.game_code})
 
     lines = [
         "# Supplied artifacts",
         "",
-        "Files this project needs, cannot distribute, and cannot regenerate. Put them",
-        "in this folder. Everything here is ignored by git except this document and the",
-        "ignore rules beside it, so a payload dropped in cannot be committed by accident.",
+        "Files this project needs, cannot distribute, and cannot regenerate. Put them in",
+        "this folder. Everything here is ignored by git except this document and the ignore",
+        "rules beside it, so a payload dropped in cannot be committed by accident.",
         "",
-        "This file is generated from the manifest the code checks against. Do not edit it",
-        "by hand: run `z64kit artifacts --write-readme` after the manifest changes.",
+        "This file is generated from the manifest the code checks against. Do not edit it by",
+        "hand: run `z64kit artifacts --write-readme` after the manifest changes.",
         "",
-        "## How a file is accepted",
+        "## You almost certainly do not need all of these",
         "",
-        "**SHA-256 alone decides.** Size is a cheap pre-filter and CRC32 is there so a",
-        "file can be cross-referenced against a public database. Neither one accepts or",
-        "rejects anything.",
-        "",
-        "A file whose digest does not match is reported with the reason, not just a",
-        "failure. Wrong size, right size with altered content, and a recognised file",
-        "under the wrong name are three different problems with three different fixes.",
+        f"The list below covers {games} games. Which files matter depends entirely on which",
+        "games you own, so ask the tool rather than reading the whole table:",
         "",
         "```",
-        "z64kit artifacts            # what is here, what is missing, what is wrong",
+        "z64kit artifacts --source YOUR-GAME-FOLDER",
         "```",
         "",
-        "## Expected files",
+        "That reports only the files the games in that folder actually need, and says which",
+        "are missing, which are present but wrong, and which are correct under the wrong",
+        "name. Without `--source` every file below is treated as required.",
         "",
-        f"{len(wanted)} files. The checksum pair is the ROM each patch is bound to, which",
-        "is how a patch built for another revision is refused rather than applied.",
+        "## Scope",
         "",
-        "A save file is listed against the game whose patch it ships with, because it",
-        "means nothing on its own. Only patches carry target checksums; a save file is",
-        "matched by its own digest instead.",
+        "| | |",
+        "|:--|:--|",
+        "| Region | USA releases only |",
+        f"| Games covered | {games} |",
+        f"| Files expected | {len(wanted)} |",
+        "| Filenames | lowercase throughout |",
+        "| Decides acceptance | SHA-256, and nothing else |",
         "",
-        "| File | Game | Purpose | Bytes | Target CRC1 / CRC2 |",
-        "|:-----|:-----|:--------|------:|:-------------------|",
+        "Size is a cheap pre-filter and CRC32 is there so a file can be cross-referenced",
+        "against a public database. Neither one accepts or rejects anything.",
+        "",
+        "## What the checksum column means",
+        "",
+        "Every patch was applied to the ROM it targets, and the header checksum of the",
+        "result was then recomputed.",
+        "",
+        "| Value | Meaning |",
+        "|:------|:--------|",
+        "| `valid-6102` | The patched ROM verifies under boot chip 6102 |",
+        "| `no boot chip` | The patched ROM verifies under no boot chip this tool knows |",
+        "| `not checked` | The ROM it targets was not available to test against |",
+        "",
+        "A `no boot chip` result is a measurement, not a verdict. The unit emulates the",
+        "boot chip rather than holding a real one, so whether it enforces that check is",
+        "untested on hardware here. Treat those patches as unverified rather than broken.",
+        "",
+        "Even a patch that verifies is only proven to start. A protection check that lets",
+        "the game boot and then degrades play later cannot be detected by any test in this",
+        "project, and that failure mode was real on this platform.",
+        "",
     ]
-    lines += [_folder_row(entry, manifest) for entry in wanted]
-    lines += [
-        "",
-        "### Digests",
-        "",
-        "```",
+
+    sections = [
+        (
+            "patch",
+            "Save and boot fixes",
+            "Without one of these the game either cannot write a save or will not start.",
+        ),
+        (
+            "crack",
+            "Copy protection removal",
+            "These games check for a real cartridge and refuse to run from a disk.",
+        ),
+        ("save", "Save data", "Shipped alongside a patch, and meaningless without it."),
+        (
+            "header",
+            "Target ROM headers",
+            "64 bytes identifying the ROM a patch belongs to. Only a non-APS patch needs "
+            "one: an APS carries its own binding at a fixed offset.",
+        ),
     ]
-    for entry in wanted:
-        lines.append(f"{entry.sha256}  {entry.filename}")
+
+    for kind, title, blurb in sections:
+        rows = by_kind.get(kind) or []
+        if not rows:
+            continue
+        lines += [f"## {title}", "", f"{blurb}", "", f"{len(rows)} files.", ""]
+        if kind == "header":
+            lines += ["| File | Belongs to |", "|:-----|:-----------|"]
+            owners = {}
+            for entry in wanted:
+                for companion in entry.companions:
+                    owners[companion] = entry.filename
+            lines += [f"| `{e.filename}` | `{owners.get(e.filename, 'its patch')}` |" for e in rows]
+        else:
+            lines += [
+                "| File | Game | Bytes | Target CRC1 / CRC2 | Checksum after |",
+                "|:-----|:-----|------:|:-------------------|:---------------|",
+            ]
+            for entry in rows:
+                game = entry.game or ""
+                if not game:
+                    owner = owning_patch(manifest, entry.filename)
+                    game = (owner.game or "") if owner else ""
+                if entry.target_crc1 and entry.target_crc2:
+                    target = f"`{entry.target_crc1}` / `{entry.target_crc2}`"
+                else:
+                    target = "matched by its own digest"
+                after = {
+                    None: "",
+                    "not-checked": "not checked",
+                    "could-not-apply": "would not apply",
+                    "matches-no-boot-chip": "no boot chip",
+                }.get(entry.checksum_after, entry.checksum_after or "")
+                lines.append(
+                    f"| `{entry.filename}` | {game} | {entry.size:,} | {target} | {after} |"
+                )
+        lines.append("")
+
+    lines += ["## Digests", "", "```"]
+    lines += [f"{e.sha256}  {e.filename}" for e in wanted]
     lines += [
         "```",
         "",
         "### CRC32, for looking a file up elsewhere",
         "",
-        "| File | CRC32 |",
-        "|:-----|:------|",
+        "```",
     ]
-    lines += [f"| `{e.filename}` | `{e.crc32}` |" for e in wanted]
-
-    companions = [e for e in wanted if e.companions]
-    if companions:
-        lines += [
-            "",
-            "## Files that travel in pairs",
-            "",
-            "Some patches need a save file present as well, and the unit expects both to",
-            "carry the ROM's name once they reach a disk. The tool renames them together,",
-            "so here they keep the names below.",
-            "",
-            "| Patch | Also needs |",
-            "|:------|:-----------|",
-        ]
-        lines += [
-            f"| `{e.filename}` | {', '.join(f'`{c}`' for c in e.companions)} |" for e in companions
-        ]
-
+    lines += [f"{e.crc32}  {e.filename}" for e in wanted]
     lines += [
+        "```",
         "",
         "## Checking a file yourself",
         "",
-        "macOS and any system with Perl:",
+        "macOS, and any system with Perl:",
         "",
         "```bash",
-        "shasum -a 256 *.aps *.ram *.eep",
+        "shasum -a 256 *",
         "```",
         "",
         "Linux:",
         "",
         "```bash",
-        "sha256sum *.aps *.ram *.eep",
+        "sha256sum *",
         "```",
         "",
         "Windows PowerShell:",
         "",
         "```powershell",
-        "Get-FileHash -Algorithm SHA256 *.aps, *.ram, *.eep",
+        "Get-FileHash -Algorithm SHA256 *",
         "```",
         "",
         "Compare the result against the digest list above. A digest that appears in the",
@@ -444,8 +555,8 @@ def render_folder_readme(manifest: Manifest) -> str:
         lines += [f"| `{e.filename}` | {e.description or e.kind} |" for e in others]
         lines.append("")
     lines += [
-        "Game images never belong here either. This folder is for the small files that",
-        "make a game run on the unit, not for the games.",
+        "Game images never belong here either. This folder is for the small files that make",
+        "a game run on the unit, not for the games.",
         "",
         "## Provenance",
         "",
@@ -455,9 +566,9 @@ def render_folder_readme(manifest: Manifest) -> str:
     lines += [f"| `{e.filename}` | {e.provenance} |" for e in wanted]
     lines += [
         "",
-        "A recorded source says where the digest came from. It is not a claim that the",
-        "file is correct, safe, or what it says it is. Every one of these was verified",
-        "against the ROM it targets before being trusted, and so should any replacement.",
+        "A recorded source says where the digest came from. It is not a claim that the file",
+        "is correct, safe, or what it says it is. Every one of these was verified against",
+        "the ROM it targets before being trusted, and so should any replacement.",
         "",
     ]
     return "\n".join(lines)

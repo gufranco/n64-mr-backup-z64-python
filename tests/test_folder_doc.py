@@ -121,14 +121,23 @@ class TestRenderedDocument:
 
         assert artifacts.render_folder_readme(manifest) == artifacts.render_folder_readme(manifest)
 
-    def test_orders_rows_by_filename_so_the_output_is_stable(self):
+    def test_rows_within_a_section_are_ordered_by_filename(self):
         manifest = artifacts.load_default_manifest()
 
         text = artifacts.render_folder_readme(manifest)
-        names = [e.filename for e in manifest.entries() if e.kind in artifacts.FOLDER_KINDS]
-        positions = [text.index(n) for n in sorted(names)]
+        section = text.split("## Save and boot fixes")[1].split("## ")[0]
+        rows = [line.split("`")[1] for line in section.splitlines() if line.startswith("| `")]
 
-        assert positions == sorted(positions)
+        assert rows == sorted(rows)
+
+    def test_the_digest_block_is_ordered_by_filename(self):
+        manifest = artifacts.load_default_manifest()
+
+        text = artifacts.render_folder_readme(manifest)
+        block = text.split("## Digests")[1].split("```")[1]
+        names = [line.split()[1] for line in block.strip().splitlines()]
+
+        assert names == sorted(names)
 
     def test_gives_a_digest_command_for_each_platform(self):
         text = artifacts.render_folder_readme(artifacts.load_default_manifest())
@@ -298,12 +307,12 @@ class TestCompanionRowsAreNotBlank:
 
         assert "Star Wars Episode I - Racer (USA)" in row
 
-    def test_a_save_file_says_which_patch_it_accompanies(self):
+    def test_a_save_file_appears_in_its_own_section(self):
         text = artifacts.render_folder_readme(artifacts.load_default_manifest())
 
-        row = next(line for line in text.splitlines() if "`swep1rus.eep`" in line)
+        section = text.split("## Save data")[1].split("## ")[0]
 
-        assert "swep1rus.aps" in row
+        assert "swep1rus.eep" in section
 
     def test_no_expected_file_row_has_a_blank_game_column(self):
         manifest = artifacts.load_default_manifest()
@@ -318,7 +327,7 @@ class TestCompanionRowsAreNotBlank:
                 continue
             assert cells[1], f"blank game column: {line}"
 
-    def test_no_expected_file_row_has_a_blank_purpose_column(self):
+    def test_no_expected_file_row_has_a_blank_game_column_in_a_patch_section(self):
         manifest = artifacts.load_default_manifest()
         text = artifacts.render_folder_readme(manifest)
         names = {e.filename for e in artifacts.folder_entries(manifest)}
@@ -331,17 +340,30 @@ class TestCompanionRowsAreNotBlank:
                 continue
             assert cells[2], f"blank purpose column: {line}"
 
-    def test_a_patch_row_keeps_its_own_description(self):
+    def test_a_patch_row_names_the_game_and_its_binding(self):
         text = artifacts.render_folder_readme(artifacts.load_default_manifest())
 
         row = next(line for line in text.splitlines() if "`swep1rus.aps`" in line)
 
-        assert "Save fix" in row
+        assert "Star Wars" in row
+        assert "72F70398" in row
 
-    def test_the_checksum_column_explains_its_own_emptiness_for_saves(self):
+    def test_a_save_row_says_it_is_matched_by_its_own_digest(self):
         text = artifacts.render_folder_readme(artifacts.load_default_manifest())
 
-        assert "not bound to a checksum" in text.lower() or "no checksum" in text.lower()
+        section = text.split("## Save data")[1].split("## ")[0]
+
+        assert "matched by its own digest" in section
+
+    def test_the_checksum_column_is_explained_before_it_is_used(self):
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest())
+
+        assert text.index("What the checksum column means") < text.index("Checksum after")
+
+    def test_a_no_boot_chip_result_is_called_a_measurement_not_a_verdict(self):
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest())
+
+        assert "measurement, not a verdict" in text
 
 
 class TestOwningPatch:
@@ -362,3 +384,132 @@ class TestOwningPatch:
         manifest = artifacts.load_default_manifest()
 
         assert artifacts.owning_patch(manifest, "nothing.ram") is None
+
+
+class TestOnlyWhatTheCollectionNeeds:
+    def test_without_a_filter_every_entry_is_required(self, tmp_path):
+        manifest = artifacts.load_default_manifest()
+
+        report = artifacts.inspect_folder(tmp_path, manifest)
+
+        assert len(report.missing) == len(artifacts.folder_entries(manifest))
+
+    def test_a_filter_narrows_what_counts_as_missing(self, tmp_path):
+        manifest = artifacts.load_default_manifest()
+
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"cc-usa.aps"})
+
+        assert report.missing == ("cc-usa.aps",)
+
+    def test_an_empty_filter_means_nothing_is_missing(self, tmp_path):
+        manifest = artifacts.load_default_manifest()
+
+        report = artifacts.inspect_folder(tmp_path, manifest, required=set())
+
+        assert report.missing == ()
+        assert report.complete is True
+
+    def test_a_file_outside_the_filter_is_still_verified_when_present(self, tmp_path):
+        from pathlib import Path
+
+        manifest = artifacts.load_default_manifest()
+        source = Path("patches") / "cc-usa.aps"
+        if not source.exists():
+            pytest.skip("the real payload is not present on this machine")
+        (tmp_path / "cc-usa.aps").write_bytes(source.read_bytes())
+
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"zoot-usa.aps"})
+
+        assert "cc-usa.aps" in report.present
+
+    def test_a_wrong_file_outside_the_filter_is_still_reported(self, tmp_path):
+        manifest = artifacts.load_default_manifest()
+        (tmp_path / "cc-usa.aps").write_bytes(b"\x00" * 10)
+
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"zoot-usa.aps"})
+
+        assert "cc-usa.aps" in report.wrong
+
+
+class TestRequiredForCollection:
+    def test_a_game_in_the_collection_requires_its_patch(self):
+        manifest = artifacts.load_default_manifest()
+        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "cc-usa.aps")
+
+        required = artifacts.required_for(manifest, {(entry.target_crc1, entry.target_crc2)})
+
+        assert "cc-usa.aps" in required
+
+    def test_a_game_not_in_the_collection_requires_nothing(self):
+        manifest = artifacts.load_default_manifest()
+
+        assert artifacts.required_for(manifest, {("DEADBEEF", "CAFEBABE")}) == set()
+
+    def test_a_non_aps_patch_requires_its_header_sidecar(self):
+        manifest = artifacts.load_default_manifest()
+        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "banjo.zps")
+
+        required = artifacts.required_for(manifest, {(entry.target_crc1, entry.target_crc2)})
+
+        assert "banjo.hdr" in required
+
+    def test_an_aps_patch_needs_no_header_because_it_carries_its_own_binding(self):
+        manifest = artifacts.load_default_manifest()
+        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "zoot-usa.aps")
+
+        required = artifacts.required_for(manifest, {(entry.target_crc1, entry.target_crc2)})
+
+        assert not any(name.endswith(".hdr") for name in required)
+
+    def test_a_companion_save_is_required_with_its_patch(self):
+        manifest = artifacts.load_default_manifest()
+        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "dk64-usa.aps")
+
+        required = artifacts.required_for(manifest, {(entry.target_crc1, entry.target_crc2)})
+
+        assert "dk64-usa.ram" in required
+
+    def test_matching_is_case_insensitive_on_the_checksum(self):
+        manifest = artifacts.load_default_manifest()
+        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "cc-usa.aps")
+        lowered = (entry.target_crc1.lower(), entry.target_crc2.lower())
+
+        assert "cc-usa.aps" in artifacts.required_for(manifest, {lowered})
+
+
+class TestVerifiedCountRespectsTheFilter:
+    def test_a_file_outside_the_filter_is_not_counted_as_needed(self, tmp_path):
+        from pathlib import Path
+
+        manifest = artifacts.load_default_manifest()
+        for name in ("cc-usa.aps", "zoot-usa.aps"):
+            source = Path("patches") / name
+            if not source.exists():
+                pytest.skip("the real payloads are not present on this machine")
+            (tmp_path / name).write_bytes(source.read_bytes())
+
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"cc-usa.aps"})
+
+        assert report.needed == ("cc-usa.aps",)
+        assert set(report.present) == {"cc-usa.aps", "zoot-usa.aps"}
+
+    def test_needed_present_counts_only_what_was_asked_for(self, tmp_path):
+        from pathlib import Path
+
+        manifest = artifacts.load_default_manifest()
+        for name in ("cc-usa.aps", "zoot-usa.aps"):
+            source = Path("patches") / name
+            if not source.exists():
+                pytest.skip("the real payloads are not present on this machine")
+            (tmp_path / name).write_bytes(source.read_bytes())
+
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"cc-usa.aps"})
+
+        assert report.needed_present == ("cc-usa.aps",)
+
+    def test_with_no_filter_needed_is_every_folder_entry(self, tmp_path):
+        manifest = artifacts.load_default_manifest()
+
+        report = artifacts.inspect_folder(tmp_path, manifest)
+
+        assert len(report.needed) == len(artifacts.folder_entries(manifest))

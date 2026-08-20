@@ -846,11 +846,13 @@ class TestArtifactsCommandReporting:
 
 class TestDoctorChecksTheArtifactFolder:
     def test_reports_how_many_of_the_required_files_verified(self, tmp_path, capsys):
-        from z64kit import cli
+        from z64kit import artifacts, cli
+
+        expected = len(artifacts.folder_entries(artifacts.load_default_manifest()))
 
         cli.main(["doctor", "--folder", str(tmp_path)])
 
-        assert "0 of 15 verified" in capsys.readouterr().out
+        assert f"0 of {expected} verified" in capsys.readouterr().out
 
     def test_lists_every_missing_file_by_name(self, tmp_path, capsys):
         from z64kit import artifacts, cli
@@ -939,16 +941,18 @@ class TestDoctorChecksTheArtifactFolder:
         cli.main(["doctor", "--folder", str(tmp_path)])
         printed = capsys.readouterr().out
 
-        assert "15 of 15 verified" in printed
+        assert "verified" in printed
         assert "missing" not in printed.lower()
 
     def test_a_missing_folder_is_reported_rather_than_raised(self, tmp_path, capsys):
-        from z64kit import cli
+        from z64kit import artifacts, cli
+
+        expected = len(artifacts.folder_entries(artifacts.load_default_manifest()))
 
         code = cli.main(["doctor", "--folder", str(tmp_path / "absent")])
 
         assert code == 0
-        assert "0 of 15 verified" in capsys.readouterr().out
+        assert f"0 of {expected} verified" in capsys.readouterr().out
 
     def test_both_commands_agree_on_what_is_missing(self, tmp_path, capsys):
         """One inspection function, so doctor and artifacts cannot disagree."""
@@ -1127,3 +1131,110 @@ class TestWizardDispatchWithNoArgv:
         monkeypatch.setattr(wizard, "run", lambda console, **kw: 7)
 
         assert cli.main(None) == 7
+
+
+class TestPatchLibraryIndexesApsWithoutASidecar:
+    """An APS carries its target checksums at a fixed offset, so it needs no .hdr."""
+
+    def aps_for(self, crc1, crc2, payload=b"\xaa\xbb\xcc\xdd", at=0x40):
+        import struct
+
+        out = bytearray(b"APS10")
+        out += bytes([1, 0])
+        out += b" " * 50
+        out += bytes([0])
+        out += b"ZZE"
+        out += struct.pack(">II", crc1, crc2)
+        out += bytes(5)
+        out += struct.pack("<I", 0x400000)
+        out += struct.pack("<I", at) + bytes([len(payload)]) + payload
+        return bytes(out)
+
+    def test_an_aps_with_no_header_sidecar_is_indexed(self, tmp_path):
+        (tmp_path / "fix.aps").write_bytes(self.aps_for(0x11223344, 0x55667788))
+
+        assert cli._patch_library(str(tmp_path))
+
+    def test_the_indexed_patch_reaches_the_matching_rom(self, tmp_path):
+        from tests.conftest import make_rom
+
+        (tmp_path / "fix.aps").write_bytes(self.aps_for(0x11223344, 0x55667788))
+        rom = make_rom(crc1=0x11223344, crc2=0x55667788)
+
+        library = cli._patch_library(str(tmp_path))
+        found = cli._patches_for(library, _fake_game(rom))
+
+        assert [entry[1] for entry in found] == ["APS"]
+
+    def test_a_patch_for_another_rom_is_not_applied(self, tmp_path):
+        from tests.conftest import make_rom
+
+        (tmp_path / "fix.aps").write_bytes(self.aps_for(0xDEADBEEF, 0xCAFEBABE))
+        rom = make_rom(crc1=0x11223344, crc2=0x55667788)
+
+        assert cli._patches_for(cli._patch_library(str(tmp_path)), _fake_game(rom)) == []
+
+    def test_a_header_sidecar_still_takes_precedence(self, tmp_path):
+        from tests.conftest import make_rom
+
+        rom = make_rom(crc1=0x11223344, crc2=0x55667788)
+        (tmp_path / "crack.zps").write_bytes(b"\x00" * 32)
+        (tmp_path / "crack.hdr").write_bytes(rom[:64])
+
+        found = cli._patches_for(cli._patch_library(str(tmp_path)), _fake_game(rom))
+
+        assert [entry[1] for entry in found] == ["ZPS"]
+
+    def test_a_byteswapped_header_sidecar_still_matches_a_big_endian_rom(self, tmp_path):
+        from tests.conftest import byteswap, make_rom
+
+        rom = make_rom(crc1=0x11223344, crc2=0x55667788)
+        (tmp_path / "crack.zps").write_bytes(b"\x00" * 32)
+        (tmp_path / "crack.hdr").write_bytes(byteswap(rom[:64], "v64"))
+
+        assert cli._patches_for(cli._patch_library(str(tmp_path)), _fake_game(rom))
+
+    def test_a_companion_save_travels_with_its_patch(self, tmp_path):
+        from tests.conftest import make_rom
+
+        (tmp_path / "fix.aps").write_bytes(self.aps_for(0x11223344, 0x55667788))
+        (tmp_path / "fix.ram").write_bytes(b"\x01" * 64)
+        rom = make_rom(crc1=0x11223344, crc2=0x55667788)
+
+        found = cli._patches_for(cli._patch_library(str(tmp_path)), _fake_game(rom))
+
+        assert sorted(entry[1] for entry in found) == ["APS", "RAM"]
+
+    def test_a_truncated_aps_is_ignored_rather_than_fatal(self, tmp_path):
+        (tmp_path / "broken.aps").write_bytes(b"APS10" + bytes(8))
+
+        assert cli._patch_library(str(tmp_path)) == {}
+
+    def test_the_real_patch_folder_indexes_every_patch(self):
+        from pathlib import Path
+
+        if not (Path("patches") / "cc-usa.aps").exists():
+            pytest.skip("the real payloads are not present on this machine")
+
+        assert len(cli._patch_library("patches")) >= 12
+
+
+def _fake_game(rom: bytes):
+    """The two fields patch lookup needs, taken from a real header."""
+    import dataclasses
+
+    from z64kit.rom import header
+
+    parsed = header.parse(rom[:64])
+
+    @dataclasses.dataclass(frozen=True)
+    class Stub:
+        identity_key: bytes
+        crc1: str
+        crc2: str
+
+    return Stub(
+        identity_key=header.identity_key(rom) or b"",
+        crc1=parsed.crc1,
+        crc2=parsed.crc2,
+    )

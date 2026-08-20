@@ -247,3 +247,89 @@ class TestShippedManifest:
         for item in raw["entries"]:
             assert "payload" not in item
             assert "data" not in item
+
+
+class TestRegionAndGameCode:
+    def entry(self, **kw):
+        base = {
+            "name": "x",
+            "kind": "patch",
+            "filename": "x.aps",
+            "size": 1,
+            "sha256": "a" * 64,
+            "crc32": "0" * 8,
+            "provenance": "test",
+        }
+        base.update(kw)
+        return base
+
+    def test_a_region_survives_a_round_trip(self):
+        entry = artifacts._entry_from_dict(self.entry(region="EUR"))
+
+        assert artifacts.entry_to_dict(entry)["region"] == "EUR"
+
+    def test_a_game_code_survives_a_round_trip(self):
+        entry = artifacts._entry_from_dict(self.entry(game_code="NZLP"))
+
+        assert artifacts.entry_to_dict(entry)["game_code"] == "NZLP"
+
+    def test_both_default_to_empty_when_absent(self):
+        entry = artifacts._entry_from_dict(self.entry())
+
+        assert entry.region is None
+        assert entry.game_code is None
+
+    def test_an_absent_region_is_not_written_back(self):
+        entry = artifacts._entry_from_dict(self.entry())
+
+        assert "region" not in artifacts.entry_to_dict(entry)
+
+
+class TestTheRealManifestIsBroad:
+    def test_the_scope_is_usa_and_is_stated_rather_than_implied(self):
+        manifest = artifacts.load_default_manifest()
+
+        regions = {e.region for e in manifest.entries() if e.region}
+
+        assert regions == {"USA"}
+
+    def test_it_covers_far_more_than_a_dozen_games(self):
+        manifest = artifacts.load_default_manifest()
+
+        games = {e.game_code for e in manifest.entries() if e.game_code}
+
+        assert len(games) >= 50
+
+    def test_every_patch_entry_names_the_game_it_targets(self):
+        manifest = artifacts.load_default_manifest()
+
+        unnamed = [
+            e.filename for e in manifest.entries() if e.kind in ("patch", "crack") and not e.game
+        ]
+
+        assert unnamed == [], f"patches with no game named: {unnamed}"
+
+    def test_every_patch_carries_target_checksums(self):
+        manifest = artifacts.load_default_manifest()
+
+        unbound = [
+            e.filename
+            for e in manifest.entries()
+            if e.kind in ("patch", "crack") and not (e.target_crc1 and e.target_crc2)
+        ]
+
+        assert unbound == [], f"patches with no binding: {unbound}"
+
+    def test_no_two_entries_share_a_filename(self):
+        manifest = artifacts.load_default_manifest()
+        names = [e.filename for e in manifest.entries()]
+
+        assert len(names) == len(set(names))
+
+    def test_a_header_sidecar_is_a_companion_of_its_patch(self):
+        manifest = artifacts.load_default_manifest()
+        headers = {e.filename for e in manifest.entries() if e.kind == "header"}
+
+        claimed = {c for e in manifest.entries() for c in e.companions}
+
+        assert headers <= claimed, f"orphan headers: {sorted(headers - claimed)}"

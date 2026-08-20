@@ -265,3 +265,60 @@ class TestVerification:
         volume.corrupt_for_test(image.data_lba())
 
         assert volume.verify() == ["TEST.BIN"]
+
+
+class TestEveryTimestampFieldCarriesTheFixedStamp:
+    """A directory entry has five date and time fields, not two.
+
+    Only write time and write date were set, leaving creation and last access at
+    zero. Zero is still deterministic, so images stayed reproducible, but DOS shows
+    those fields as unset and the intent was one fixed stamp on everything.
+    """
+
+    def entry_for(self, name="GAME", extension="Z64"):
+        volume = writer.Volume(label="TEST")
+        volume.add_file(writer.ROOT, name, extension, b"\x00" * 4096)
+        raw = volume.to_bytes()
+        at = raw.find(f"{name:<8}{extension}".encode())
+        assert at >= 0
+        return raw[at : at + 32]
+
+    def field(self, entry, offset, size=2):
+        return int.from_bytes(entry[offset : offset + size], "little")
+
+    def test_write_time_is_the_fixed_stamp(self):
+        assert self.field(self.entry_for(), 0x16) == image.TZ_TIME
+
+    def test_write_date_is_the_fixed_stamp(self):
+        assert self.field(self.entry_for(), 0x18) == image.TZ_DATE
+
+    def test_creation_time_is_the_fixed_stamp(self):
+        assert self.field(self.entry_for(), 0x0E) == image.TZ_TIME
+
+    def test_creation_date_is_the_fixed_stamp(self):
+        assert self.field(self.entry_for(), 0x10) == image.TZ_DATE
+
+    def test_last_access_date_is_the_fixed_stamp(self):
+        assert self.field(self.entry_for(), 0x12) == image.TZ_DATE
+
+    def test_the_creation_tenths_field_stays_zero(self):
+        assert self.field(self.entry_for(), 0x0D, size=1) == 0
+
+    def test_a_subdirectory_entry_carries_the_stamp_too(self):
+        volume = writer.Volume(label="TEST")
+        volume.make_dir(writer.ROOT, "SUB")
+        raw = volume.to_bytes()
+        at = raw.find(b"SUB     ")
+
+        entry = raw[at : at + 32]
+        assert self.field(entry, 0x0E) == image.TZ_TIME
+        assert self.field(entry, 0x10) == image.TZ_DATE
+        assert self.field(entry, 0x12) == image.TZ_DATE
+
+    def test_the_stamp_is_nineteen_ninety_six(self):
+        year = (image.TZ_DATE >> 9) + 1980
+
+        assert year == 1996
+
+    def test_two_builds_still_produce_identical_bytes(self):
+        assert self.entry_for() == self.entry_for()

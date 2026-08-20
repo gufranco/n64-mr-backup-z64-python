@@ -85,3 +85,67 @@ class TestGoldenReproduction:
         free = [c for c in range(2, volume._fat_limit()) if volume._fat_get(c) == 0]
 
         assert free == list(range(free[0], free[-1] + 1))
+
+
+class TestPatchesActuallyReachTheDisk:
+    """The guard for a silent failure: patches indexed as zero and nothing said.
+
+    A patch folder holding only APS payloads produced an empty index, because the
+    lookup demanded a `.hdr` sidecar that the APS format makes unnecessary. Every
+    disk built that way was missing every patch and reported success.
+    """
+
+    PATCH_FOLDER = Path(__file__).parent.parent / "patches"
+
+    def library(self):
+        from z64kit import cli
+
+        if not (self.PATCH_FOLDER / "zoot-usa.aps").exists():
+            pytest.skip("the real payloads are not present on this machine")
+        return cli._patch_library(str(self.PATCH_FOLDER))
+
+    def test_a_folder_of_bare_aps_payloads_is_not_empty(self):
+        assert len(self.library()) >= 12
+
+    def test_a_game_on_a_real_disk_resolves_its_patch(self):
+        from z64kit import cli, scan
+
+        library = self.library()
+        folder = disk_folder(1)
+        found = scan.scan(str(folder))
+
+        matched = [g for g in found.games if cli._patches_for(library, g)]
+
+        assert matched, "no game on this disk resolved a patch"
+
+    def test_the_resolved_patch_is_the_one_named_for_that_game(self):
+        from z64kit import cli, scan
+
+        library = self.library()
+        found = scan.scan(str(disk_folder(1)))
+
+        for game in found.games:
+            for stem, _extension, _blob in cli._patches_for(library, game):
+                assert stem in {
+                    "cc-usa",
+                    "dk64-usa",
+                    "dx-btusc",
+                    "ebikeusa",
+                    "jfg-usa",
+                    "kgsgood",
+                    "mglf-usa",
+                    "mten-usa",
+                    "nbac2usa",
+                    "swep1rus",
+                    "zmm-usa",
+                    "zoot-usa",
+                }
+
+    def test_a_companion_save_is_resolved_with_its_patch(self):
+        library = self.library()
+
+        with_companions = [
+            entries for entries in library.values() if len({e[1] for e in entries}) > 1
+        ]
+
+        assert len(with_companions) == 3

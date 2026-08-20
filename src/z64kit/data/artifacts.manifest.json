@@ -1,7 +1,533 @@
 {
  "schema": 1,
- "note": "Identification only. This file lists the name, size and digests of artifacts the user must supply themselves. It contains no payload bytes and names no source for obtaining them.",
+ "note": "Identification only. This file lists the name, size and digests of artifacts the user must supply themselves. It contains no payload bytes and names no source for obtaining them. Scope is USA releases. Filenames are lowercase throughout. Every patch was applied to the ROM it targets and the resulting header checksum recorded in checksum_after: valid-<chip> means the patched ROM verifies under that boot chip, matches-no-boot-chip means it does not verify under any known one. Whether the unit enforces that check is untested on hardware.",
  "entries": [
+  {
+   "name": "z64bios220",
+   "kind": "bios",
+   "filename": "z64bios220.zip",
+   "size": 372754,
+   "sha256": "3dccb8df48bd987931ea658e1dc28a8441e42fda449afb6f5a577d6e88182852",
+   "crc32": "efcc5d08",
+   "provenance": "Community release by SilverFox, April 2007",
+   "description": "Unofficial CF Edition BIOS 2.20, based on 2.18d"
+  },
+  {
+   "name": "1080_j",
+   "kind": "crack",
+   "filename": "1080_j.zps",
+   "size": 22703,
+   "sha256": "f178ddff087ffb9e5f5b0a3fa385aa9deedb0c1875084e836d28c524baea02cb",
+   "crc32": "56d4db3b",
+   "provenance": "CRACK.ZIP",
+   "target_crc1": "1FBAF161",
+   "target_crc2": "2C1C54F1",
+   "game": "1080 SNOWBOARDING",
+   "description": "Copy protection crack",
+   "companions": [
+    "1080_j.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NTEA",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "banjo",
+   "kind": "crack",
+   "filename": "banjo.zps",
+   "size": 7634,
+   "sha256": "91fd085ffe98f5c8aaecc8cf2b056767ef2910af3e847368c09b821c2cc142ec",
+   "crc32": "11e7242f",
+   "provenance": "CRACK.ZIP",
+   "target_crc1": "A4BF9306",
+   "target_crc2": "BF0CDFD1",
+   "game": "Banjo-Kazooie",
+   "description": "Copy protection crack",
+   "companions": [
+    "banjo.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NBKE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "nba_cs",
+   "kind": "crack",
+   "filename": "nba_cs.zps",
+   "size": 16466,
+   "sha256": "4510745d41130f9d24fef4d2210534a205e1d28dc15fc12c78d85434eda791f1",
+   "crc32": "17fe451c",
+   "provenance": "CRACK.ZIP",
+   "target_crc1": "616B8494",
+   "target_crc2": "8A509210",
+   "game": "NBA COURTSIDE",
+   "description": "Copy protection crack",
+   "companions": [
+    "nba_cs.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NNBE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "yoshi_e",
+   "kind": "crack",
+   "filename": "yoshi_e.zps",
+   "size": 4600,
+   "sha256": "c91ff1f7425223c68427e80cf56becbf0d06f31e6a94003143d67e19318342ad",
+   "crc32": "afb188b8",
+   "provenance": "CRACK.ZIP",
+   "target_crc1": "2337D8E8",
+   "target_crc2": "6B8E7CEC",
+   "game": "YOSHI STORY",
+   "description": "Copy protection crack",
+   "companions": [
+    "yoshi_e.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NYSE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "1080_j-hdr",
+   "kind": "header",
+   "filename": "1080_j.hdr",
+   "size": 64,
+   "sha256": "29a81157e4620b56f4bddf2555ca2bb4caabecd2d3fa67fb282053163ebf0fb3",
+   "crc32": "abbeb3c4",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "bam99-hdr",
+   "kind": "header",
+   "filename": "bam99.hdr",
+   "size": 64,
+   "sha256": "d37b4019dcc0e397c00e9fd0b7abf4615d0b52c3332e38e142f1f5a9d5ef5ffe",
+   "crc32": "20433960",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "banjo-hdr",
+   "kind": "header",
+   "filename": "banjo.hdr",
+   "size": 64,
+   "sha256": "473d0e8c503e0fded99a5c6c229264ed20ec4392728e523de260b6101c5b077c",
+   "crc32": "e39ab1eb",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "bh-hdr",
+   "kind": "header",
+   "filename": "bh.hdr",
+   "size": 64,
+   "sha256": "512591bfacbf450928e86905607762b9544e96e9d69c602ec2f6ddf7bc60237c",
+   "crc32": "65d53f49",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "bos99-hdr",
+   "kind": "header",
+   "filename": "bos99.hdr",
+   "size": 64,
+   "sha256": "4577b01c68f8ef1e09f491519e3c30fbd25dc43d340f612ad98595c08460a47b",
+   "crc32": "8ded548e",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "btanxvfx-hdr",
+   "kind": "header",
+   "filename": "btanxvfx.hdr",
+   "size": 64,
+   "sha256": "198cdff3e1500b00101e4d5ad5889e60f2da012427b59deca95dcecc6dc935b8",
+   "crc32": "da00b37b",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "buckpfx-hdr",
+   "kind": "header",
+   "filename": "buckpfx.hdr",
+   "size": 64,
+   "sha256": "61aef3d0660c0a7ff1d7a1cce47f00594a3e4f2ad54a91592ca71dfbaa0ab9bc",
+   "crc32": "cf45b9e9",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "chmtwst2-hdr",
+   "kind": "header",
+   "filename": "chmtwst2.hdr",
+   "size": 64,
+   "sha256": "8ce8cf1f0182ca477a2a8bf441b5b86c40558e21824cf711cb44f3df301bcfac",
+   "crc32": "f49934d8",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "davfx-hdr",
+   "kind": "header",
+   "filename": "davfx.hdr",
+   "size": 64,
+   "sha256": "ae8047daeabbc09ea649f658c706b14ca9e276dc8e1b22e30d75ce684b2df743",
+   "crc32": "0c5defd1",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "fdvfx-hdr",
+   "kind": "header",
+   "filename": "fdvfx.hdr",
+   "size": 64,
+   "sha256": "80c01d16453c275c2cea73a1b48e7aae77d89ccaa2069f0136bbb32c93ea3a39",
+   "crc32": "7c7a66af",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "fsh99sfx-hdr",
+   "kind": "header",
+   "filename": "fsh99sfx.hdr",
+   "size": 64,
+   "sha256": "af58a13d5fc417786715baa9f781f259d1e6c7d956f14f428fc7be60cd0a992b",
+   "crc32": "bbb1a852",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "fzerousa-hdr",
+   "kind": "header",
+   "filename": "fzerousa.hdr",
+   "size": 64,
+   "sha256": "722d7053b718fa62558f052ae34ab9fa2eed2a2642c1ae826e70ff321cce204d",
+   "crc32": "ed13e955",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "gnvfx-hdr",
+   "kind": "header",
+   "filename": "gnvfx.hdr",
+   "size": 64,
+   "sha256": "ee8cd8e64700dd0125ac6eb96df35082707f3f03c10ea0b30cfe2ea949673a61",
+   "crc32": "3189734b",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "iss98vfx-hdr",
+   "kind": "header",
+   "filename": "iss98vfx.hdr",
+   "size": 64,
+   "sha256": "fba2bade95c0c5aeda70fded7e56558a247e2ecadd828d3047d3f17fe369b947",
+   "crc32": "4d7243a3",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "kgs-ags-hdr",
+   "kind": "header",
+   "filename": "kgs-ags.hdr",
+   "size": 64,
+   "sha256": "3c5a4e1319ccb4bcba3dafe89f4d12d8ab81f791d4e7d7c535702a0a815bbc10",
+   "crc32": "72d14c8c",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "kombat4-hdr",
+   "kind": "header",
+   "filename": "kombat4.hdr",
+   "size": 64,
+   "sha256": "23a78d9a8e7f8519c29f0277785867c901915fe04daf5b9905e4f06a375c951f",
+   "crc32": "028a5328",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "micromac-hdr",
+   "kind": "header",
+   "filename": "micromac.hdr",
+   "size": 64,
+   "sha256": "90df92a5a3a6c40dfb39720af61479dda6eff5ae7ac323f055469a5c85842067",
+   "crc32": "ace0e21b",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "mlb-kgjr-hdr",
+   "kind": "header",
+   "filename": "mlb-kgjr.hdr",
+   "size": 64,
+   "sha256": "7dc18751c660a66d21babea39e7af7d1478e0290a603286ab394cabbc6bacf55",
+   "crc32": "0d3d9e84",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "mpusa-hdr",
+   "kind": "header",
+   "filename": "mpusa.hdr",
+   "size": 64,
+   "sha256": "cf86e63eb42cc6a3b1e3ea7e93b520db5eefd69acf9d25910e29ceb29d08bcb1",
+   "crc32": "7807ac3e",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "nascar99-hdr",
+   "kind": "header",
+   "filename": "nascar99.hdr",
+   "size": 64,
+   "sha256": "23163c29e414141b8733b44f6dafe38cc5503ff669f0e17e1f0cb1092af5d497",
+   "crc32": "20482a8e",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "nba99-hdr",
+   "kind": "header",
+   "filename": "nba99.hdr",
+   "size": 64,
+   "sha256": "b1f836660cfa9843e4708a805a6a498901987cc1102f92023b4b19421907bf23",
+   "crc32": "34049b4f",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "nba99sfx-hdr",
+   "kind": "header",
+   "filename": "nba99sfx.hdr",
+   "size": 64,
+   "sha256": "026b3428553204f11e24c25b0dbffd2c68fdcf81ae7ae9dceadf7d3fe070ef2f",
+   "crc32": "866ec7ff",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "nba_cs-hdr",
+   "kind": "header",
+   "filename": "nba_cs.hdr",
+   "size": 64,
+   "sha256": "c9bea7caab8217d4f980bde0cb95628eaf01c0bc8c3852537ffab8fa4c42a202",
+   "crc32": "194ece3f",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "ncpfx-hdr",
+   "kind": "header",
+   "filename": "ncpfx.hdr",
+   "size": 64,
+   "sha256": "eb1c2656c3569b5aec7f7292b067f82d7da81dd5ed6940ffa70c869544207fdf",
+   "crc32": "cdc6ec24",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "rugrt-hdr",
+   "kind": "header",
+   "filename": "rugrt.hdr",
+   "size": 128,
+   "sha256": "627c4bb6159c8e1e0e434ec5d5e56cd92de966f729981d63df17513ecdcc9dc5",
+   "crc32": "ad7538e6",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "scarspfx-hdr",
+   "kind": "header",
+   "filename": "scarspfx.hdr",
+   "size": 64,
+   "sha256": "ca13998d2ab9c221f558f545ebfbfb7f4f02de0014b8c5d16f80becf4ac2737b",
+   "crc32": "31eab48c",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "ssvfx-hdr",
+   "kind": "header",
+   "filename": "ssvfx.hdr",
+   "size": 64,
+   "sha256": "372249e6e6b509f3640248222529a85502ddfcbb9c3396d73254b1dd5f3ce506",
+   "crc32": "df97ad09",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "vchess-hdr",
+   "kind": "header",
+   "filename": "vchess.hdr",
+   "size": 64,
+   "sha256": "1a2a59a4f4286e7a9168863b3dd5169c1fa0923c5ccfc67a99d226dba767cbfa",
+   "crc32": "2db81299",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "wcwn-hdr",
+   "kind": "header",
+   "filename": "wcwn.hdr",
+   "size": 64,
+   "sha256": "97476a60070050adcf846494e549ecee40d1b6f3bf2aeb6d56ea2d0c65f31d58",
+   "crc32": "bed0e0d1",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "wcwpfx-hdr",
+   "kind": "header",
+   "filename": "wcwpfx.hdr",
+   "size": 64,
+   "sha256": "7a8836fd3fbecff3d4e891dfa0a341b8e2f047158a54a7bd2d34ccd9ab40b9d6",
+   "crc32": "e67be363",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "wg3dvfx-hdr",
+   "kind": "header",
+   "filename": "wg3dvfx.hdr",
+   "size": 64,
+   "sha256": "2eba23b94d4c432796e31af02cead6ddd170c4d89e3875dec061b6dc41a1646a",
+   "crc32": "8422410e",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "yoshi_e-hdr",
+   "kind": "header",
+   "filename": "yoshi_e.hdr",
+   "size": 64,
+   "sha256": "4ad1361c4e8e725e3f9e3b56a6c9087f72a9f4f1124af85f27d46de2106d47ee",
+   "crc32": "f2323426",
+   "provenance": "ships beside its patch",
+   "description": "Target ROM header, needed to match a non-APS patch"
+  },
+  {
+   "name": "bam99",
+   "kind": "patch",
+   "filename": "bam99.ips",
+   "size": 3232,
+   "sha256": "19b1364a461ffbc6976a2586a7861ae1580f3676607771ba0afa7467850f5bd7",
+   "crc32": "e02b5b29",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "4222D89F",
+   "target_crc2": "AFE0B637",
+   "game": "Bust A Move '99",
+   "companions": [
+    "bam99.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NB3E",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "bass",
+   "kind": "patch",
+   "filename": "bass.aps",
+   "size": 3052,
+   "sha256": "916e27e81b694f8562b24e7ac02e65cd9a793cae4657fd456e705df3cffb22f9",
+   "crc32": "49ec1ad5",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "8C138BE0",
+   "target_crc2": "95700E46",
+   "game": "In-Fisherman - Bass Hunter 64 (USA)",
+   "region": "USA",
+   "game_code": "NFHE",
+   "checksum_after": "valid-6102"
+  },
+  {
+   "name": "bh",
+   "kind": "patch",
+   "filename": "bh.ips",
+   "size": 46,
+   "sha256": "3263aaae6d0f484129c2197a78b2a4456b04eadc7718a400b97e274097a6a758",
+   "crc32": "72fd4ac5",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "5326696F",
+   "target_crc2": "FE9A99C3",
+   "game": "BODY HARVEST",
+   "companions": [
+    "bh.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NBHE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "bos99",
+   "kind": "patch",
+   "filename": "bos99.ips",
+   "size": 3879,
+   "sha256": "0b8971d46cf1f835eb7ab7f53edf76b7a1c6c82f9bcf6809f4918d6aa06b0ff3",
+   "crc32": "c614b3cf",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "82EFDC30",
+   "target_crc2": "806A2461",
+   "game": "BLADES OF STEEL '99",
+   "companions": [
+    "bos99.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NHOE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "btanxvfx",
+   "kind": "patch",
+   "filename": "btanxvfx.ips",
+   "size": 3207,
+   "sha256": "d66bc6eaff7e35e361f19a5b66259d15204f7271c7fb8f9a042710087e5d4265",
+   "crc32": "d473ec79",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "6AA4DDE7",
+   "target_crc2": "E3E2F4E7",
+   "game": "BATTLETANX",
+   "companions": [
+    "btanxvfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NBXE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "buckpfx",
+   "kind": "patch",
+   "filename": "buckpfx.ips",
+   "size": 3288,
+   "sha256": "c70ea6aa22cadae708ae3fc1aba13f000b62068c5be6a34dbb4f4bd3eb37bfbd",
+   "crc32": "9eba2826",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "85AE781A",
+   "target_crc2": "C756F05D",
+   "game": "BUCK BUMBLE",
+   "companions": [
+    "buckpfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NBLE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "cali",
+   "kind": "patch",
+   "filename": "cali.aps",
+   "size": 95,
+   "sha256": "06498ee097bf81bb2a185f77c12b4217ff5ee333030c9ccd559d6ea8fc717a07",
+   "crc32": "a60a366d",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "AC16400E",
+   "target_crc2": "CF5D071A",
+   "game": "CAL SPEED",
+   "region": "USA",
+   "game_code": "NCLE",
+   "checksum_after": "matches-no-boot-chip"
+  },
   {
    "name": "cc-usa",
    "kind": "patch",
@@ -13,7 +539,46 @@
    "target_crc1": "95286EB4",
    "target_crc2": "B76AD58F",
    "game": "Command & Conquer (USA)",
-   "description": "No save fix"
+   "description": "No save fix",
+   "region": "USA",
+   "game_code": "NCCE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "chmtwst2",
+   "kind": "patch",
+   "filename": "chmtwst2.ips",
+   "size": 79,
+   "sha256": "fb5c5a5b3fe1208289ff5ebd770ab97e6c15efcaa206954216dd4a7df1561c65",
+   "crc32": "567c51aa",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "CD538CE4",
+   "target_crc2": "618AFCF9",
+   "game": "Chameleon Twist2",
+   "companions": [
+    "chmtwst2.hdr"
+   ],
+   "region": "USA",
+   "game_code": "N2VE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "davfx",
+   "kind": "patch",
+   "filename": "davfx.ips",
+   "size": 2939,
+   "sha256": "fc42b05bc540b3a9c84ee78d24c68ffaade735691582f24c64bd465d5baf53b8",
+   "crc32": "835ab43f",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "F5363349",
+   "target_crc2": "DBF9D21B",
+   "game": "DeadlyArts",
+   "companions": [
+    "davfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NGAE",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
    "name": "dk64-usa",
@@ -29,17 +594,10 @@
    "description": "Boot and save fix",
    "companions": [
     "dk64-usa.ram"
-   ]
-  },
-  {
-   "name": "dk64-usa.ram",
-   "kind": "save",
-   "filename": "dk64-usa.ram",
-   "size": 65536,
-   "sha256": "82a2a771e4f3ef0dbcd6972e616dbc0abf5c2c0eac679a6fba44de2294597ba9",
-   "crc32": "8fa0cc19",
-   "provenance": "Unofficial Z64 Patch File v3.0U",
-   "description": "Boot and save fix"
+   ],
+   "region": "USA",
+   "game_code": "NDOE",
+   "checksum_after": "valid-6102"
   },
   {
    "name": "dx-btusc",
@@ -52,7 +610,10 @@
    "target_crc1": "C2E9AA9A",
    "target_crc2": "475D70AA",
    "game": "Banjo-Tooie (USA)",
-   "description": "Crack and save fix"
+   "description": "Crack and save fix",
+   "region": "USA",
+   "game_code": "NB7E",
+   "checksum_after": "valid-6102"
   },
   {
    "name": "ebikeusa",
@@ -65,7 +626,100 @@
    "target_crc1": "07861842",
    "target_crc2": "A12EBC9F",
    "game": "Excitebike 64 (USA)",
-   "description": "Boot and save fix"
+   "description": "Boot and save fix",
+   "region": "USA",
+   "game_code": "NMXE",
+   "checksum_after": "valid-6102"
+  },
+  {
+   "name": "fdvfx",
+   "kind": "patch",
+   "filename": "fdvfx.ips",
+   "size": 4249,
+   "sha256": "095c77332a63c4f994f853858f1e95592694a056199e3e10cd620c4366d2eff8",
+   "crc32": "028422e1",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "A92D52E5",
+   "target_crc2": "1D26B655",
+   "game": "FLYING DRAGON",
+   "companions": [
+    "fdvfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NFDE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "fsh99sfx",
+   "kind": "patch",
+   "filename": "fsh99sfx.ips",
+   "size": 29,
+   "sha256": "210444eed464ec3b4ce972bb6b25dbdfbcf19148a32c9d844dae4a8924946bb0",
+   "crc32": "3419c0c1",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "3261D479",
+   "target_crc2": "ED0DBC25",
+   "game": "Fox Sports Hoops 99",
+   "companions": [
+    "fsh99sfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NF9E",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "fzerousa",
+   "kind": "patch",
+   "filename": "fzerousa.ips",
+   "size": 39141,
+   "sha256": "f23128aad6fc04a4f517339553511d879f596f7770e423bca417f086820a6f65",
+   "crc32": "0e44e843",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "B30ED978",
+   "target_crc2": "3003C9F9",
+   "game": "F-ZERO X",
+   "companions": [
+    "fzerousa.hdr"
+   ],
+   "region": "USA",
+   "game_code": "CFZE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "gnvfx",
+   "kind": "patch",
+   "filename": "gnvfx.ips",
+   "size": 239,
+   "sha256": "71978fb55ebda301ff6b389199c28fbc3a6cfd83860af61cf5b9a59cf2e4d199",
+   "crc32": "c24f3f9d",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "4690FB1C",
+   "target_crc2": "4CD56D44",
+   "game": "GOLDEN NUGGET 64",
+   "companions": [
+    "gnvfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NGNE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "iss98vfx",
+   "kind": "patch",
+   "filename": "iss98vfx.ips",
+   "size": 3214,
+   "sha256": "417997a3a5615ca5d749100d3589b821bef5e9c2a7c1e787f43d4bd17d55a524",
+   "crc32": "9115267b",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "7F0FDA09",
+   "target_crc2": "6061CE0B",
+   "game": "I.S.S.98",
+   "companions": [
+    "iss98vfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NWSE",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
    "name": "jfg-usa",
@@ -81,17 +735,28 @@
    "description": "Boot and save fix",
    "companions": [
     "jfg-usa.ram"
-   ]
+   ],
+   "region": "USA",
+   "game_code": "NJFE",
+   "checksum_after": "valid-6102"
   },
   {
-   "name": "jfg-usa.ram",
-   "kind": "save",
-   "filename": "jfg-usa.ram",
-   "size": 65536,
-   "sha256": "6fe933595ae50f308ef242d7dd507d2bba81bf2ddf80f39120ad038605e19239",
-   "crc32": "4c94501d",
-   "provenance": "Unofficial Z64 Patch File v3.0U",
-   "description": "Boot and save fix"
+   "name": "kgs-ags",
+   "kind": "patch",
+   "filename": "kgs-ags.ips",
+   "size": 94382,
+   "sha256": "1a2498aa7043af8f541ff751badd6cc07474c4695d70c76802fcac5448e3f84c",
+   "crc32": "0ab13f12",
+   "provenance": "z64patch.dat, z64patch30UP-unofficial.zip z64patch.dat, z64pf30u.zip z64patch.dat",
+   "target_crc1": "36281F23",
+   "target_crc2": "009756CF",
+   "game": "KEN GRIFFEY SLUGFEST",
+   "companions": [
+    "kgs-ags.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NKJE",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
    "name": "kgsgood",
@@ -104,7 +769,28 @@
    "target_crc1": "36281F23",
    "target_crc2": "009756CF",
    "game": "Ken Griffey Jr.'s Slugfest (USA)",
-   "description": "Boot fix for the good dump"
+   "description": "Boot fix for the good dump",
+   "region": "USA",
+   "game_code": "NKJE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "kombat4",
+   "kind": "patch",
+   "filename": "kombat4.ips",
+   "size": 71,
+   "sha256": "d746d679b017c66ad682493a783e235397bb25cad7d5c6ec20d1b0ba78db0cfc",
+   "crc32": "4139dc43",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "417DD4F4",
+   "target_crc2": "1B482FE2",
+   "game": "MORTAL KOMBAT 4",
+   "companions": [
+    "kombat4.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NM4E",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
    "name": "mglf-usa",
@@ -117,7 +803,64 @@
    "target_crc1": "664BA3D4",
    "target_crc2": "678A80B7",
    "game": "Mario Golf (USA)",
-   "description": "Save fix"
+   "description": "Save fix",
+   "region": "USA",
+   "game_code": "NMFE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "micromac",
+   "kind": "patch",
+   "filename": "micromac.ips",
+   "size": 3873,
+   "sha256": "8aadad4fad239e31eefd4979157afbfcf54455ffaadeef1b957cc6c6a184a555",
+   "crc32": "281be6b2",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "F1850C35",
+   "target_crc2": "ACE07912",
+   "game": "MICROMACHINES64TURBO",
+   "companions": [
+    "micromac.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NV3E",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "mlb-kgjr",
+   "kind": "patch",
+   "filename": "mlb-kgjr.ips",
+   "size": 27,
+   "sha256": "80a94bedf3455570a3e11b830844485644a7968b6819ed0c925d3cebbc3123a5",
+   "crc32": "5cdcb3c9",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "80C1C05C",
+   "target_crc2": "EA065EF4",
+   "game": "MLB FEATURING K G JR",
+   "companions": [
+    "mlb-kgjr.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NKGE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "mpusa",
+   "kind": "patch",
+   "filename": "mpusa.ips",
+   "size": 3879,
+   "sha256": "d658aa476d18f7d66621e9e7e2a2c4219513c5dadfb2a314f78d60883df85497",
+   "crc32": "bcb4d68f",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "2829657E",
+   "target_crc2": "A0621877",
+   "game": "MarioParty",
+   "companions": [
+    "mpusa.hdr"
+   ],
+   "region": "USA",
+   "game_code": "CLBE",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
    "name": "mten-usa",
@@ -130,7 +873,79 @@
    "target_crc1": "5001CF4F",
    "target_crc2": "F30CB3BD",
    "game": "Mario Tennis (USA)",
-   "description": "Boot and save fix"
+   "description": "Boot and save fix",
+   "region": "USA",
+   "game_code": "NM8E",
+   "checksum_after": "valid-6102"
+  },
+  {
+   "name": "mtr",
+   "kind": "patch",
+   "filename": "mtr.aps",
+   "size": 3056,
+   "sha256": "3eeb85c9020db2d1a31f1a94f6b9903533ee971002e1f49107d1b81426fa79fb",
+   "crc32": "a5c62d18",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "B19AD999",
+   "target_crc2": "7E585118",
+   "game": "Monster Truck Madness 64 (USA)",
+   "region": "USA",
+   "game_code": "NM3E",
+   "checksum_after": "valid-6102"
+  },
+  {
+   "name": "nascar99",
+   "kind": "patch",
+   "filename": "nascar99.ips",
+   "size": 31630,
+   "sha256": "66b7894cdd2705968c398d4b3a66c37d7e5d0c7b7e7222f076231db937b526b2",
+   "crc32": "d1457bd0",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "23749578",
+   "target_crc2": "80DC58FD",
+   "game": "NASCAR 99",
+   "companions": [
+    "nascar99.hdr"
+   ],
+   "region": "USA",
+   "game_code": "N9CE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "nba99",
+   "kind": "patch",
+   "filename": "nba99.ips",
+   "size": 3879,
+   "sha256": "45dbec1c924de2bc342a99883f011715e9d0539a323832a7493c895abd13de19",
+   "crc32": "e1c5bd8d",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "A292524F",
+   "target_crc2": "3D6C2A49",
+   "game": "NBA IN THE ZONE '99",
+   "companions": [
+    "nba99.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NB2E",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "nba99sfx",
+   "kind": "patch",
+   "filename": "nba99sfx.ips",
+   "size": 41,
+   "sha256": "6bf5a95682dc12de246d6cfabe3e652fa4a87c272ab3bcd232160a0e1aa7751b",
+   "crc32": "25c78db1",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "810729F6",
+   "target_crc2": "E03FCFC1",
+   "game": "NBA JAM 99",
+   "companions": [
+    "nba99sfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NB9E",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
    "name": "nbac2usa",
@@ -143,7 +958,157 @@
    "target_crc1": "916852D8",
    "target_crc2": "73DBEAEF",
    "game": "NBA Courtside 2 featuring Kobe Bryant (USA)",
-   "description": "No save fix"
+   "description": "No save fix",
+   "region": "USA",
+   "game_code": "NCKE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "ncpfx",
+   "kind": "patch",
+   "filename": "ncpfx.ips",
+   "size": 146,
+   "sha256": "b19ed295e46d4848b7f35ee14e8ec49905818a72fb6252cdf5361261548be001",
+   "crc32": "c6579188",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "2857674D",
+   "target_crc2": "CC4337DA",
+   "game": "NIGHTMARE CREATURES",
+   "companions": [
+    "ncpfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NNCE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "newtetr",
+   "kind": "patch",
+   "filename": "newtetr.aps",
+   "size": 4015,
+   "sha256": "7503e7558b490eaf7311b13a09d4437ac52c97e0e79d50fb187f216570d4a541",
+   "crc32": "cdd87db0",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "2153143F",
+   "target_crc2": "992D6351",
+   "game": "New Tetris, The (USA)",
+   "region": "USA",
+   "game_code": "NRIE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "quake2",
+   "kind": "patch",
+   "filename": "quake2.aps",
+   "size": 3036,
+   "sha256": "e0fe194d6e278a26f42d36eaf21c84f19ab195dccf541b0e9688aac8e841d92b",
+   "crc32": "5a90b8de",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "BDA8F143",
+   "target_crc2": "B1AF2D62",
+   "game": "Quake II (USA)",
+   "region": "USA",
+   "game_code": "NQ2E",
+   "checksum_after": "valid-6102"
+  },
+  {
+   "name": "rugrt",
+   "kind": "patch",
+   "filename": "rugrt.ips",
+   "size": 106,
+   "sha256": "928a9c4632893399df2b06c30b8b01e526b2c923a73b77fc441ce0272a973afd",
+   "crc32": "ef324a06",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "0C02B3C5",
+   "target_crc2": "9E2511B8",
+   "game": "RUGRATSSCAVENGERHUNT",
+   "companions": [
+    "rugrt.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NRGE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "scarspfx",
+   "kind": "patch",
+   "filename": "scarspfx.ips",
+   "size": 191,
+   "sha256": "9acc623243547c80a898e23edabacb23827e5a7a478eaaed4a74739e62701ef1",
+   "crc32": "8c5eaa20",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "769147F3",
+   "target_crc2": "2033C10E",
+   "game": "SCARS",
+   "companions": [
+    "scarspfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NCSE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "smbus",
+   "kind": "patch",
+   "filename": "smbus.aps",
+   "size": 8722,
+   "sha256": "28db79602868170363aeea31e2fc29ae8dd55d8481afa8bb9c37c5cb1891e423",
+   "crc32": "825069d5",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "916B8B5B",
+   "target_crc2": "780B85A4",
+   "game": "SMASH BROTHERS",
+   "region": "USA",
+   "game_code": "NALE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "snobo2us",
+   "kind": "patch",
+   "filename": "snobo2us.aps",
+   "size": 136,
+   "sha256": "915705ec9983db401d70fbd70f6729a46c0239213a602f230d1fc3703ab3d5c6",
+   "crc32": "9a72b3c6",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "930C29EA",
+   "target_crc2": "939245BF",
+   "game": "SNOWBOARD KIDS2",
+   "region": "USA",
+   "game_code": "NK2E",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "ssvfx",
+   "kind": "patch",
+   "filename": "ssvfx.ips",
+   "size": 3879,
+   "sha256": "964707ceff06da9179691fe23e8d4d5688cb38836963b4666ee271e22fc23473",
+   "crc32": "7dbcfd14",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "DDD93C85",
+   "target_crc2": "DAE381E8",
+   "game": "STAR SOLDIER",
+   "companions": [
+    "ssvfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NS6E",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "starntsc",
+   "kind": "patch",
+   "filename": "starntsc.aps",
+   "size": 18232,
+   "sha256": "eb48a9ef07ec0729cf21c6b1588ff51e1f75eaada694aab9d6c59f40cc861f54",
+   "crc32": "4a6f7bb3",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "72F70398",
+   "target_crc2": "6556A98B",
+   "game": "STAR WARS EP1 RACER",
+   "region": "USA",
+   "game_code": "NEPE",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
    "name": "swep1rus",
@@ -159,37 +1124,97 @@
    "description": "Save fix",
    "companions": [
     "swep1rus.eep"
-   ]
+   ],
+   "region": "USA",
+   "game_code": "NEPE",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
-   "name": "swep1rus.eep",
-   "kind": "save",
-   "filename": "swep1rus.eep",
-   "size": 512,
-   "sha256": "d6d0ceb8c2dd5d9da39c31052786acd60a0743ea61cd40012f2d7a620c305919",
-   "crc32": "b701479b",
-   "provenance": "Unofficial Z64 Patch File v3.0U",
-   "description": "Save fix"
+   "name": "vchess",
+   "kind": "patch",
+   "filename": "vchess.ips",
+   "size": 42,
+   "sha256": "f3aea0214e3350eecf99434c04a0276f584fe4e18fb1922ee1bfa383c0238c73",
+   "crc32": "433c5e94",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "82B3248B",
+   "target_crc2": "E73E244D",
+   "game": "VIRTUALCHESS",
+   "companions": [
+    "vchess.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NVCE",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
-   "name": "z64bios220",
-   "kind": "bios",
-   "filename": "z64bios220.zip",
-   "size": 372754,
-   "sha256": "3dccb8df48bd987931ea658e1dc28a8441e42fda449afb6f5a577d6e88182852",
-   "crc32": "efcc5d08",
-   "provenance": "Community release by SilverFox, April 2007",
-   "description": "Unofficial CF Edition BIOS 2.20, based on 2.18d"
+   "name": "vil8",
+   "kind": "patch",
+   "filename": "vil8.aps",
+   "size": 168,
+   "sha256": "0753ca05b6afb4dc70c3b1e4306947431f5dd15c80de7fb2d03e912add52ef85",
+   "crc32": "51b75501",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "EA71056A",
+   "target_crc2": "E4214847",
+   "game": "VIGILANTE 8",
+   "region": "USA",
+   "game_code": "NV8E",
+   "checksum_after": "valid-6102"
   },
   {
-   "name": "z64patch",
-   "kind": "patch-db",
-   "filename": "z64patch.dat",
-   "size": 657092,
-   "sha256": "f9e8c296ab12a38fb92e69bf3c50d9827cbad1e82005f7a7838925abd5e0e7a5",
-   "crc32": "73a6180b",
-   "provenance": "fab at elitendo.com",
-   "description": "Unofficial Z64 patch database v3.0U"
+   "name": "wcwn",
+   "kind": "patch",
+   "filename": "wcwn.ips",
+   "size": 3272,
+   "sha256": "bedeff28e1537013c76c43cf338c2b9dc016e22a3a2a440020e74c4e603e383f",
+   "crc32": "b22a8b42",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "D4C45A1A",
+   "target_crc2": "F425B25E",
+   "game": "NITRO64",
+   "companions": [
+    "wcwn.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NW3E",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "wcwpfx",
+   "kind": "patch",
+   "filename": "wcwpfx.ips",
+   "size": 87,
+   "sha256": "b222838ba5cf43043e71388f01b4657cc34553ba41a54dae6deac23680fbb0cc",
+   "crc32": "e349696d",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "DEE596AB",
+   "target_crc2": "AF3B7AE7",
+   "game": "WCW / nWo  REVENGE",
+   "companions": [
+    "wcwpfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NW2E",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "wg3dvfx",
+   "kind": "patch",
+   "filename": "wg3dvfx.ips",
+   "size": 29,
+   "sha256": "3a34bc16a6a602bbb2961970456916a7258610c28d033ec9eb9fee022b36f5c4",
+   "crc32": "a1d886e0",
+   "provenance": "z64patch27P-unofficial.zip z64patch.dat",
+   "target_crc1": "5A9D3859",
+   "target_crc2": "97AAE710",
+   "game": "W.G. 3DHOCKEY98",
+   "companions": [
+    "wg3dvfx.hdr"
+   ],
+   "region": "USA",
+   "game_code": "NW8E",
+   "checksum_after": "matches-no-boot-chip"
   },
   {
    "name": "zmm-usa",
@@ -202,7 +1227,10 @@
    "target_crc1": "5354631C",
    "target_crc2": "03A2DEF0",
    "game": "Legend of Zelda, The - Majora's Mask (USA)",
-   "description": "Boot and save fix"
+   "description": "Boot and save fix",
+   "region": "USA",
+   "game_code": "NZSE",
+   "checksum_after": "valid-6102"
   },
   {
    "name": "zoot-usa",
@@ -215,7 +1243,50 @@
    "target_crc1": "EC7011B7",
    "target_crc2": "7616D72B",
    "game": "Legend of Zelda, The - Ocarina of Time (USA)",
+   "description": "Boot and save fix",
+   "region": "USA",
+   "game_code": "CZLE",
+   "checksum_after": "matches-no-boot-chip"
+  },
+  {
+   "name": "z64patch",
+   "kind": "patch-db",
+   "filename": "z64patch.dat",
+   "size": 657092,
+   "sha256": "f9e8c296ab12a38fb92e69bf3c50d9827cbad1e82005f7a7838925abd5e0e7a5",
+   "crc32": "73a6180b",
+   "provenance": "fab at elitendo.com",
+   "description": "Unofficial Z64 patch database v3.0U"
+  },
+  {
+   "name": "dk64-usa.ram",
+   "kind": "save",
+   "filename": "dk64-usa.ram",
+   "size": 65536,
+   "sha256": "82a2a771e4f3ef0dbcd6972e616dbc0abf5c2c0eac679a6fba44de2294597ba9",
+   "crc32": "8fa0cc19",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
    "description": "Boot and save fix"
+  },
+  {
+   "name": "jfg-usa.ram",
+   "kind": "save",
+   "filename": "jfg-usa.ram",
+   "size": 65536,
+   "sha256": "6fe933595ae50f308ef242d7dd507d2bba81bf2ddf80f39120ad038605e19239",
+   "crc32": "4c94501d",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "description": "Boot and save fix"
+  },
+  {
+   "name": "swep1rus.eep",
+   "kind": "save",
+   "filename": "swep1rus.eep",
+   "size": 512,
+   "sha256": "d6d0ceb8c2dd5d9da39c31052786acd60a0743ea61cd40012f2d7a620c305919",
+   "crc32": "b701479b",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "description": "Save fix"
   }
  ]
 }
