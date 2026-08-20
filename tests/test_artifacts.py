@@ -1,0 +1,249 @@
+import hashlib
+import json
+import zlib
+
+import pytest
+
+from z64kit import artifacts
+
+
+def entry_dict(**over):
+    base = {
+        "name": "dk64-usa",
+        "kind": "patch",
+        "filename": "dk64-usa.aps",
+        "size": 8,
+        "sha256": hashlib.sha256(b"payload!").hexdigest(),
+        "crc32": f"{zlib.crc32(b'payload!'):08x}",
+        "target_crc1": "EC58EABF",
+        "target_crc2": "AD7C7169",
+        "game": "Donkey Kong 64 (USA)",
+        "description": "Boot and save fix",
+        "provenance": "Unofficial Z64 Patch File v3.0U",
+        "companions": ["dk64-usa.ram"],
+    }
+    base.update(over)
+    return base
+
+
+@pytest.fixture
+def manifest(tmp_path):
+    path = tmp_path / "artifacts.manifest.json"
+    payload = {
+        "schema": 1,
+        "note": "Identification only. No payload bytes are stored here.",
+        "entries": [entry_dict()],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return artifacts.load_manifest(path)
+
+
+class TestLoadManifest:
+    def test_indexes_entries_by_sha256(self, manifest):
+        digest = hashlib.sha256(b"payload!").hexdigest()
+
+        assert digest in manifest.by_sha256
+
+    def test_exposes_entry_fields(self, manifest):
+        entry = manifest.by_sha256[hashlib.sha256(b"payload!").hexdigest()]
+
+        assert entry.name == "dk64-usa"
+        assert entry.kind == "patch"
+        assert entry.companions == ("dk64-usa.ram",)
+
+    def test_rejects_an_entry_carrying_payload_bytes(self, tmp_path):
+        path = tmp_path / "bad.json"
+        bad = entry_dict()
+        bad["payload"] = "deadbeef"
+        path.write_text(json.dumps({"schema": 1, "entries": [bad]}), encoding="utf-8")
+
+        with pytest.raises(artifacts.ManifestError, match="payload"):
+            artifacts.load_manifest(path)
+
+    def test_rejects_an_unknown_schema_version(self, tmp_path):
+        path = tmp_path / "future.json"
+        path.write_text(json.dumps({"schema": 99, "entries": []}), encoding="utf-8")
+
+        with pytest.raises(artifacts.ManifestError, match="schema"):
+            artifacts.load_manifest(path)
+
+    def test_exposes_every_entry_as_a_tuple(self, manifest):
+        assert len(manifest.entries()) == 1
+
+    def test_rejects_an_entry_missing_a_required_field(self, tmp_path):
+        path = tmp_path / "incomplete.json"
+        short = entry_dict()
+        del short["sha256"]
+        path.write_text(json.dumps({"schema": 1, "entries": [short]}), encoding="utf-8")
+
+        with pytest.raises(artifacts.ManifestError, match="sha256"):
+            artifacts.load_manifest(path)
+
+
+class TestIdentify:
+    def test_recognises_a_known_artifact(self, manifest):
+        found = artifacts.identify(b"payload!", manifest)
+
+        assert found is not None
+        assert found.name == "dk64-usa"
+
+    def test_returns_none_for_unknown_content(self, manifest):
+        assert artifacts.identify(b"something else", manifest) is None
+
+
+class TestVerify:
+    def test_accepts_matching_content(self, manifest):
+        entry = manifest.by_sha256[hashlib.sha256(b"payload!").hexdigest()]
+
+        result = artifacts.verify(b"payload!", entry)
+
+        assert result.ok is True
+        assert result.reason == ""
+
+    def test_rejects_on_size_before_hashing(self, manifest):
+        entry = manifest.by_sha256[hashlib.sha256(b"payload!").hexdigest()]
+
+        result = artifacts.verify(b"short", entry)
+
+        assert result.ok is False
+        assert "size" in result.reason
+
+    def test_rejects_on_digest_when_size_matches(self, manifest):
+        entry = manifest.by_sha256[hashlib.sha256(b"payload!").hexdigest()]
+
+        result = artifacts.verify(b"payloadX", entry)
+
+        assert result.ok is False
+        assert "sha256" in result.reason
+
+
+class TestDiagnose:
+    def test_names_a_size_near_miss(self, manifest):
+        message = artifacts.diagnose(b"payloadXY", manifest)
+
+        assert "not recognised" in message
+        assert "9 bytes" in message
+
+    def test_reports_the_computed_digest_so_it_can_be_searched(self, manifest):
+        message = artifacts.diagnose(b"zzz", manifest)
+
+        assert hashlib.sha256(b"zzz").hexdigest() in message
+
+    def test_confirms_a_known_artifact_instead_of_complaining(self, manifest):
+        message = artifacts.diagnose(b"payload!", manifest)
+
+        assert "dk64-usa" in message
+        assert "not recognised" not in message
+
+    def test_points_at_a_same_size_entry_when_one_exists(self, manifest):
+        message = artifacts.diagnose(b"payloadX", manifest)
+
+        assert "size matches dk64-usa" in message
+        assert "modified or truncated" in message
+
+
+class TestWriteManifest:
+    def test_a_written_manifest_loads_back_unchanged(self, tmp_path):
+        entry = artifacts.build_entry(
+            name="x",
+            kind="patch",
+            filename="x.aps",
+            data=b"payload!",
+            provenance="test",
+            game="Game (USA)",
+            description="Save fix",
+            companions=("x.ram",),
+        )
+        path = tmp_path / "out.json"
+
+        artifacts.write_manifest([entry], path, note="identification only")
+        loaded = artifacts.load_manifest(path)
+
+        assert loaded.by_sha256[entry.sha256] == entry
+
+    def test_optional_fields_are_omitted_when_absent(self, tmp_path):
+        entry = artifacts.build_entry(
+            name="bare",
+            kind="save",
+            filename="bare.ram",
+            data=b"x",
+            provenance="test",
+        )
+        path = tmp_path / "bare.json"
+
+        artifacts.write_manifest([entry], path, note="n")
+        raw = json.loads(path.read_text(encoding="utf-8"))
+
+        assert "game" not in raw["entries"][0]
+        assert "companions" not in raw["entries"][0]
+        assert "target_crc1" not in raw["entries"][0]
+
+
+class TestBuildEntry:
+    def test_computes_every_digest_from_the_bytes(self):
+        entry = artifacts.build_entry(
+            name="x",
+            kind="patch",
+            filename="x.aps",
+            data=b"payload!",
+            provenance="test",
+        )
+
+        assert entry.size == 8
+        assert entry.sha256 == hashlib.sha256(b"payload!").hexdigest()
+        assert entry.crc32 == f"{zlib.crc32(b'payload!'):08x}"
+
+    def test_extracts_target_checksums_from_an_aps_payload(self):
+        blob = bytearray(b"APS10" + bytes(0x60))
+        blob[0x3D:0x41] = bytes.fromhex("EC58EABF")
+        blob[0x41:0x45] = bytes.fromhex("AD7C7169")
+
+        entry = artifacts.build_entry(
+            name="dk",
+            kind="patch",
+            filename="dk.aps",
+            data=bytes(blob),
+            provenance="test",
+        )
+
+        assert entry.target_crc1 == "EC58EABF"
+        assert entry.target_crc2 == "AD7C7169"
+
+    def test_leaves_target_checksums_empty_for_a_non_aps_payload(self):
+        entry = artifacts.build_entry(
+            name="k",
+            kind="patch",
+            filename="k.ips",
+            data=b"PATCHEOF",
+            provenance="test",
+        )
+
+        assert entry.target_crc1 is None
+
+    def test_serialises_without_any_payload_field(self):
+        entry = artifacts.build_entry(
+            name="x",
+            kind="patch",
+            filename="x.aps",
+            data=b"payload!",
+            provenance="test",
+        )
+
+        as_dict = artifacts.entry_to_dict(entry)
+
+        assert "payload" not in as_dict
+        assert as_dict["sha256"] == entry.sha256
+
+
+class TestShippedManifest:
+    def test_the_packaged_manifest_loads(self):
+        manifest = artifacts.load_default_manifest()
+
+        assert len(manifest.by_sha256) > 0
+
+    def test_the_packaged_manifest_stores_no_payloads(self):
+        raw = json.loads(artifacts.DEFAULT_MANIFEST_PATH.read_text(encoding="utf-8"))
+
+        for item in raw["entries"]:
+            assert "payload" not in item
+            assert "data" not in item

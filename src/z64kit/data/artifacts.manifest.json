@@ -1,0 +1,221 @@
+{
+ "schema": 1,
+ "note": "Identification only. This file lists the name, size and digests of artifacts the user must supply themselves. It contains no payload bytes and names no source for obtaining them.",
+ "entries": [
+  {
+   "name": "cc-usa",
+   "kind": "patch",
+   "filename": "cc-usa.aps",
+   "size": 92484,
+   "sha256": "e40a39ce5542bfd5aaeb240c267a6e9f5de3a92916090b42b4bd83b850108222",
+   "crc32": "bfcb4bc0",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "95286EB4",
+   "target_crc2": "B76AD58F",
+   "game": "Command & Conquer (USA)",
+   "description": "No save fix"
+  },
+  {
+   "name": "dk64-usa",
+   "kind": "patch",
+   "filename": "dk64-usa.aps",
+   "size": 74656,
+   "sha256": "7ec44b4f51a253235d045f69a3015f26c60101669644be1db8ed604b38c1e0ca",
+   "crc32": "72acc470",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "EC58EABF",
+   "target_crc2": "AD7C7169",
+   "game": "Donkey Kong 64 (USA)",
+   "description": "Boot and save fix",
+   "companions": [
+    "dk64-usa.ram"
+   ]
+  },
+  {
+   "name": "dk64-usa.ram",
+   "kind": "save",
+   "filename": "dk64-usa.ram",
+   "size": 65536,
+   "sha256": "82a2a771e4f3ef0dbcd6972e616dbc0abf5c2c0eac679a6fba44de2294597ba9",
+   "crc32": "8fa0cc19",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "description": "Boot and save fix"
+  },
+  {
+   "name": "dx-btusc",
+   "kind": "patch",
+   "filename": "dx-btusc.aps",
+   "size": 121964,
+   "sha256": "472e75d223bbb94591e96b93212dc14f6bf9923dc316956b1ab7f2f883456e86",
+   "crc32": "0e4b563a",
+   "provenance": "Standalone dextrose release dx-btusc",
+   "target_crc1": "C2E9AA9A",
+   "target_crc2": "475D70AA",
+   "game": "Banjo-Tooie (USA)",
+   "description": "Crack and save fix"
+  },
+  {
+   "name": "ebikeusa",
+   "kind": "patch",
+   "filename": "ebikeusa.aps",
+   "size": 24666,
+   "sha256": "662719b82363def506933186762688e71a0ddc1adfffaa02b0fc29ffde922fcb",
+   "crc32": "ebb7ca3c",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "07861842",
+   "target_crc2": "A12EBC9F",
+   "game": "Excitebike 64 (USA)",
+   "description": "Boot and save fix"
+  },
+  {
+   "name": "jfg-usa",
+   "kind": "patch",
+   "filename": "jfg-usa.aps",
+   "size": 62109,
+   "sha256": "82bcd67e020f43d69b4c9f5295d9c5e022b3df7d301000849e95dc3f2278f9a1",
+   "crc32": "ecd4d394",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "8A6009B6",
+   "target_crc2": "94ACE150",
+   "game": "Jet Force Gemini (USA)",
+   "description": "Boot and save fix",
+   "companions": [
+    "jfg-usa.ram"
+   ]
+  },
+  {
+   "name": "jfg-usa.ram",
+   "kind": "save",
+   "filename": "jfg-usa.ram",
+   "size": 65536,
+   "sha256": "6fe933595ae50f308ef242d7dd507d2bba81bf2ddf80f39120ad038605e19239",
+   "crc32": "4c94501d",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "description": "Boot and save fix"
+  },
+  {
+   "name": "kgsgood",
+   "kind": "patch",
+   "filename": "kgsgood.aps",
+   "size": 101253,
+   "sha256": "ea65c20e8cc2c4b3afba34fa7b8097f8bfaa88004efdf122b9f20684c27b837f",
+   "crc32": "5a224733",
+   "provenance": "Unofficial Z64 Patch File v3.0U, extra folder",
+   "target_crc1": "36281F23",
+   "target_crc2": "009756CF",
+   "game": "Ken Griffey Jr.'s Slugfest (USA)",
+   "description": "Boot fix for the good dump"
+  },
+  {
+   "name": "mglf-usa",
+   "kind": "patch",
+   "filename": "mglf-usa.aps",
+   "size": 92660,
+   "sha256": "f8b6177bf18e04ace451924d335c3b22a35f33cfeb9f58878da66e4747de4223",
+   "crc32": "89bfc0af",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "664BA3D4",
+   "target_crc2": "678A80B7",
+   "game": "Mario Golf (USA)",
+   "description": "Save fix"
+  },
+  {
+   "name": "mten-usa",
+   "kind": "patch",
+   "filename": "mten-usa.aps",
+   "size": 47638,
+   "sha256": "7b8a994005b87a326fce02aa8e6af1f0b300d31472d679fb8904492324e1053c",
+   "crc32": "ca75d772",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "5001CF4F",
+   "target_crc2": "F30CB3BD",
+   "game": "Mario Tennis (USA)",
+   "description": "Boot and save fix"
+  },
+  {
+   "name": "nbac2usa",
+   "kind": "patch",
+   "filename": "nbac2usa.aps",
+   "size": 217,
+   "sha256": "e6ddf1d5f11173dbb34d106e70e349ea6db9bab6f2b813ebac3c7086f0da39da",
+   "crc32": "52ee7875",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "916852D8",
+   "target_crc2": "73DBEAEF",
+   "game": "NBA Courtside 2 featuring Kobe Bryant (USA)",
+   "description": "No save fix"
+  },
+  {
+   "name": "swep1rus",
+   "kind": "patch",
+   "filename": "swep1rus.aps",
+   "size": 46818,
+   "sha256": "5a0f443c2d7fc187008e9c7cf60747cd1d4b24d2bb7da698bb8b36db377dbe75",
+   "crc32": "e8049c29",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "72F70398",
+   "target_crc2": "6556A98B",
+   "game": "Star Wars Episode I - Racer (USA)",
+   "description": "Save fix",
+   "companions": [
+    "swep1rus.eep"
+   ]
+  },
+  {
+   "name": "swep1rus.eep",
+   "kind": "save",
+   "filename": "swep1rus.eep",
+   "size": 512,
+   "sha256": "d6d0ceb8c2dd5d9da39c31052786acd60a0743ea61cd40012f2d7a620c305919",
+   "crc32": "b701479b",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "description": "Save fix"
+  },
+  {
+   "name": "z64bios220",
+   "kind": "bios",
+   "filename": "z64bios220.zip",
+   "size": 372754,
+   "sha256": "3dccb8df48bd987931ea658e1dc28a8441e42fda449afb6f5a577d6e88182852",
+   "crc32": "efcc5d08",
+   "provenance": "Community release by SilverFox, April 2007",
+   "description": "Unofficial CF Edition BIOS 2.20, based on 2.18d"
+  },
+  {
+   "name": "z64patch",
+   "kind": "patch-db",
+   "filename": "z64patch.dat",
+   "size": 657092,
+   "sha256": "f9e8c296ab12a38fb92e69bf3c50d9827cbad1e82005f7a7838925abd5e0e7a5",
+   "crc32": "73a6180b",
+   "provenance": "fab at elitendo.com",
+   "description": "Unofficial Z64 patch database v3.0U"
+  },
+  {
+   "name": "zmm-usa",
+   "kind": "patch",
+   "filename": "zmm-usa.aps",
+   "size": 108432,
+   "sha256": "52b8cf4ae0f4d7f597a6b222c420a403b9e65b8593027bd2958268f0e12df71c",
+   "crc32": "8dd87884",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "5354631C",
+   "target_crc2": "03A2DEF0",
+   "game": "Legend of Zelda, The - Majora's Mask (USA)",
+   "description": "Boot and save fix"
+  },
+  {
+   "name": "zoot-usa",
+   "kind": "patch",
+   "filename": "zoot-usa.aps",
+   "size": 128135,
+   "sha256": "84fe75fffe406d5c74b3f2e55bf39988465f48226c7349d11ca4ea58763674fc",
+   "crc32": "39d27d56",
+   "provenance": "Unofficial Z64 Patch File v3.0U",
+   "target_crc1": "EC7011B7",
+   "target_crc2": "7616D72B",
+   "game": "Legend of Zelda, The - Ocarina of Time (USA)",
+   "description": "Boot and save fix"
+  }
+ ]
+}

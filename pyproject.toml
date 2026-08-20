@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "n64-mr-backup-z64-python"
+version = "0.1.0"
+description = "Build verified Mr. Backup Z64 Zip 100 disk images and printable catalogues from an N64 ROM collection"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE.txt" }
+keywords = ["nintendo64", "n64", "z64", "mr-backup", "zip100", "fat16", "retrocomputing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Filesystems",
+    "Topic :: Utilities",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+z64kit = "z64kit.cli:main"
+
+[project.urls]
+Source = "https://github.com/gufranco/n64-mr-backup-z64-python"
+Issues = "https://github.com/gufranco/n64-mr-backup-z64-python/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/z64kit"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/z64kit", "tests", "README.md", "LICENSE.txt", "pyproject.toml"]
+exclude = ["artifacts", "specs", "**/*.z64", "**/*.v64", "**/*.n64", "**/*.aps", "**/*.ips", "**/*.img"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
+markers = ["artifacts: requires user supplied artifacts, skipped by default"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/z64kit"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = true
+exclude_lines = ["if __name__ == .__main__.:", "raise NotImplementedError"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "RUF"]
+ignore = ["RUF001"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]

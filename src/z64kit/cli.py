@@ -1,0 +1,658 @@
+"""The z64kit command line.
+
+Each command prints a human summary, and most can emit JSON instead.
+
+    scan       what is in this folder, and what is wrong with any of it
+    plan       which games land on which disk, and whether that is optimal
+    organise   write one folder per disk, renamed, without building images
+    build      write the disk images, verifying every file on the way out
+    inventory  which cartridges you have, and what the gaps cost
+    report     the printable catalogue
+    doctor     what is installed, what is missing, and what each gap costs
+
+`organise` and `build` are two ways to take the same layout. The folders are
+useful for copying to a disk by hand, for checking the naming before committing
+to an image, and for a drive the tool cannot write to directly. The images are
+byte reproducible and carry the FAT structures the unit needs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+from . import aps, artifacts, compat, db, inventory, merge, naming, packing, scan, vi
+from .fat import image, writer
+from .report import catalogue, latex, render
+
+
+def _today() -> str:
+    return datetime.datetime.now(tz=datetime.UTC).date().isoformat()
+
+
+def _layout(found: scan.Collection) -> list[tuple[str, list[scan.Game]]]:
+    if found.is_curated:
+        return [(disk, [g for g in found.games if g.disk == disk]) for disk in found.disk_names]
+    items = [packing.Item(key=g.filename, size=g.size) for g in found.games]
+    if not items:
+        return []
+    plan = packing.plan(items, image.usable_capacity())
+    by_name = {g.filename: g for g in found.games}
+    return [
+        (f"Disk {number:02d}", [by_name[item.key] for item in disk])
+        for number, disk in enumerate(plan.disks, start=1)
+    ]
+
+
+def _names(found: scan.Collection) -> dict[str, str]:
+    assigned, _, _ = naming.assign([(g.filename, g.filename) for g in found.games])
+    return assigned
+
+
+def _candidates(found: scan.Collection) -> list[compat.Candidate]:
+    return [
+        compat.Candidate(
+            key=g.filename,
+            title=g.stem,
+            save="none",
+            cic=g.cic,
+            size=g.size,
+            has_patch=bool(found.companions_for(g)),
+        )
+        for g in found.games
+    ]
+
+
+def _patch_library(folder: str | None) -> dict[bytes, list[tuple[str, str, bytes]]]:
+    """Index a patch folder by the 64 byte header of the ROM each patch targets.
+
+    A patch carries either a `.hdr` sidecar holding those bytes, or, for APS
+    payloads, the target checksums at a fixed offset. Either way the binding is
+    exact, so a patch built for another revision is never applied.
+    """
+    if not folder:
+        return {}
+    root = Path(folder)
+    if not root.is_dir():
+        return {}
+
+    payloads: dict[str, tuple[str, bytes]] = {}
+    headers: dict[str, bytes] = {}
+    extras: dict[str, list[tuple[str, bytes]]] = {}
+    rules = compat.load_rules()
+
+    for path in sorted(root.iterdir()):
+        if not path.is_file():
+            continue
+        extension = path.suffix.lstrip(".").upper()
+        if extension == "HDR":
+            headers[path.stem.lower()] = path.read_bytes()
+        elif extension in rules.patch_extensions:
+            payloads[path.stem.lower()] = (extension, path.read_bytes())
+        elif extension in rules.aux_extensions:
+            extras.setdefault(path.stem.lower(), []).append((extension, path.read_bytes()))
+
+    index: dict[bytes, list[tuple[str, str, bytes]]] = {}
+    for stem, (extension, blob) in payloads.items():
+        key = headers.get(stem)
+        if key is None and blob[:5] == b"APS10":
+            key = None
+        if key is None or len(key) != 64:
+            continue
+        entries = [(stem, extension, blob)]
+        entries += [(stem, ext, data) for ext, data in extras.get(stem, ())]
+        index[bytes(key)] = entries
+    return index
+
+
+def _scan_or_exit(root: str) -> scan.Collection:
+    try:
+        return scan.scan(root)
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(2) from exc
+
+
+def cmd_scan(args) -> int:
+    found = _scan_or_exit(args.source)
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "root": found.root,
+                    "curated": found.is_curated,
+                    "games": [
+                        {
+                            "filename": g.filename,
+                            "disk": g.disk,
+                            "size": g.size,
+                            "internal_name": g.internal_name,
+                            "game_code": g.game_code,
+                            "region": g.region,
+                            "cic": g.cic,
+                            "crc1": g.crc1,
+                            "crc2": g.crc2,
+                            "checksum_valid": g.checksum_valid,
+                            "sha256": g.sha256,
+                        }
+                        for g in found.games
+                    ],
+                    "skipped": [{"path": s.path, "reason": s.reason} for s in found.skipped],
+                    "warnings": list(found.warnings),
+                },
+                indent=1,
+            )
+        )
+        return 0
+
+    shape = "curated into disks" if found.is_curated else "a flat folder"
+    print(f"{len(found.games)} games in {shape}, {found.total_bytes / 2**30:.2f} GiB")
+    for game in found.games:
+        mark = "" if game.checksum_valid else "  unverified dump"
+        print(f"  {game.filename[:56]:56}  {game.size // 2**20:3d} MiB  {game.cic}{mark}")
+    if found.skipped:
+        print(f"\n{len(found.skipped)} skipped:")
+        for entry in found.skipped:
+            print(f"  {Path(entry.path).name}: {entry.reason}")
+    for warning in found.warnings:
+        print(f"\nnote: {warning}")
+    return 0
+
+
+def cmd_plan(args) -> int:
+    found = _scan_or_exit(args.source)
+    layout = _layout(found)
+    names = _names(found)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "disks": [
+                        {
+                            "name": name,
+                            "games": [
+                                {"file": g.filename, "name83": names.get(g.filename, "")}
+                                for g in games
+                            ],
+                        }
+                        for name, games in layout
+                    ]
+                },
+                indent=1,
+            )
+        )
+        return 0
+
+    if not found.is_curated and found.games:
+        items = [packing.Item(key=g.filename, size=g.size) for g in found.games]
+        bound = packing.lower_bound(items, image.usable_capacity())
+        verdict = "optimal" if len(layout) == bound else f"above the bound of {bound}"
+        print(f"{len(layout)} disks, {verdict}")
+    else:
+        print(f"{len(layout)} disks, taken from the existing folders")
+
+    for name, games in layout:
+        used = sum(g.size for g in games) // 2**20
+        print(f"\n{name}: {len(games)} games, {used} MiB")
+        for game in sorted(games, key=lambda g: -g.size):
+            base = names.get(game.filename, "")
+            print(
+                f"  {game.stem[:46]:46}  {base:8}.{game.true_extension}"
+                f"  {game.size // 2**20:3d} MiB"
+            )
+    return 0
+
+
+def cmd_build(args) -> int:
+    found = _scan_or_exit(args.source)
+    out_dir = Path(args.output)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    names = _names(found)
+    layout = _layout(found)
+    patches = _patch_library(getattr(args, "patches", None))
+
+    disks = []
+    for name, games in layout:
+        volume = writer.Volume(label=name.upper()[:11])
+        placed = []
+        for game in sorted(games, key=lambda g: (-g.size, g.filename)):
+            base = names[game.filename]
+            data = Path(game.path).read_bytes()
+            spot = volume.add_file(writer.ROOT, base, game.true_extension, data)
+            placed.append({"source": game.filename, "name": spot.name, "lba": spot.start_lba})
+            for companion in found.companions_for(game):
+                volume.add_file(
+                    writer.ROOT,
+                    base,
+                    companion.extension,
+                    Path(companion.path).read_bytes(),
+                )
+            for stem, extension, blob in patches.get(game.identity_key, ()):
+                spot = volume.add_file(writer.ROOT, base, extension, blob)
+                placed.append({"source": f"{stem}.{extension.lower()}", "name": spot.name})
+        volume.sort_directories()
+
+        failures = volume.verify()
+        if failures:
+            print(f"verification failed on {name}: {', '.join(failures)}", file=sys.stderr)
+            return 1
+
+        blob = volume.to_bytes()
+        target = out_dir / f"{name.replace(' ', '_')}.img"
+        target.write_bytes(blob)
+        digest = hashlib.sha256(blob).hexdigest()
+        disks.append({"name": name, "image": target.name, "sha256": digest, "files": placed})
+        print(f"{target.name}  {len(placed)} files  verified  {digest[:16]}")
+
+    (out_dir / "manifest.json").write_text(
+        json.dumps({"schema": 1, "generated": _today(), "disks": disks}, indent=1) + "\n",
+        encoding="utf-8",
+    )
+    print(f"\n{len(disks)} images written to {out_dir}, manifest.json alongside them")
+    return 0
+
+
+def cmd_organise(args) -> int:
+    found = _scan_or_exit(args.source)
+    out_dir = Path(args.output)
+    if out_dir.exists() and any(out_dir.iterdir()) and not args.force:
+        print(
+            f"{out_dir} already has content. Pass --force to write over it.",
+            file=sys.stderr,
+        )
+        return 2
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    names = _names(found)
+    patches = _patch_library(getattr(args, "patches", None))
+    disks = []
+    for name, games in _layout(found):
+        folder = out_dir / name
+        folder.mkdir(exist_ok=True)
+        written = []
+        for game in sorted(games, key=lambda g: (-g.size, g.filename)):
+            base = names[game.filename]
+            target = folder / f"{base}.{game.true_extension}"
+            target.write_bytes(Path(game.path).read_bytes())
+            written.append({"source": game.filename, "name": target.name})
+            for companion in found.companions_for(game):
+                mate = folder / f"{base}.{companion.extension}"
+                mate.write_bytes(Path(companion.path).read_bytes())
+                written.append({"source": companion.filename, "name": mate.name})
+            for stem, extension, blob in patches.get(game.identity_key, ()):
+                mate = folder / f"{base}.{extension}"
+                mate.write_bytes(blob)
+                written.append({"source": f"{stem}.{extension.lower()}", "name": mate.name})
+        disks.append({"name": name, "files": written})
+        print(f"{name}  {len(written)} files")
+
+    (out_dir / "manifest.json").write_text(
+        json.dumps({"schema": 1, "generated": _today(), "disks": disks}, indent=1) + "\n",
+        encoding="utf-8",
+    )
+    total = sum(len(d["files"]) for d in disks)
+    print(f"\n{len(disks)} folders, {total} files written to {out_dir}")
+    return 0
+
+
+def cmd_inventory(args) -> int:
+    found = _scan_or_exit(args.source)
+    rules = compat.load_rules()
+    path = Path(args.file)
+    held = inventory.load(path)
+    games = _candidates(found)
+
+    if args.own:
+        held = inventory.Inventory(owned=frozenset(args.own), recorded=True)
+        inventory.save(held, path)
+        print(f"recorded {', '.join(sorted(held.owned))} in {path}")
+
+    for question in inventory.questions(games, rules):
+        mark = "yes" if held.owns(question.key) else "not recorded"
+        print(f"\n{question.label} [{question.key}]: {mark}")
+        print(f"  {question.prompt}")
+        if question.examples:
+            print(f"  for example: {', '.join(question.examples[:3])}")
+        if question.titles:
+            print(f"  affects {question.unlocks} titles")
+
+    result = inventory.shopping_list(games, held, rules)
+    outstanding = [i for i in result.items if i.outstanding]
+    if outstanding:
+        print("\nOutstanding:")
+        for item in outstanding:
+            reference = f", for example {item.reference}" if item.reference else ""
+            print(f"  {item.label}: unlocks {item.unlocks} titles{reference}")
+    else:
+        print("\nNothing outstanding for the titles in this collection.")
+
+    if result.cartridge_only:
+        print(f"\nToo large to load at all: {len(result.cartridge_only)} titles")
+    if result.one_save_per_cartridge:
+        print("\nOne cartridge holds one game save, so parallel saves need more copies.")
+    for warning in result.warnings:
+        print(f"\nnote: {warning}")
+    return 0
+
+
+def cmd_report(args) -> int:
+    found = _scan_or_exit(args.source)
+    rules = compat.load_rules()
+    out_dir = Path(args.output)
+    held = inventory.load(Path(args.inventory)) if args.inventory else inventory.Inventory()
+
+    layout = _layout(found)
+    names = _names(found)
+    patched = {g.filename for g in found.games if found.companions_for(g)}
+    rows = catalogue.rows_from(layout, names, {}, rules, patched)
+
+    source = catalogue.build(rows, rules=rules, held=held, generated=_today())
+    result = render.write(source, out_dir / "catalogue", compile_pdf=not args.no_pdf)
+    print(result.message)
+    return 0
+
+
+def _vi_requests(args) -> dict:
+    out = {}
+    if args.no_aa:
+        out["antialiasing"] = False
+    if args.no_divot:
+        out["divot"] = False
+    if args.no_gamma_dither:
+        out["gamma_dither"] = False
+    if args.no_gamma:
+        out["gamma"] = False
+    return out
+
+
+def cmd_vi(args) -> int:
+    """Report the video configuration, and optionally edit it under guard."""
+    requests = _vi_requests(args)
+    if requests:
+        return _cmd_vi_patch(args, requests)
+    found = _scan_or_exit(args.source)
+    rows = []
+    for game in found.games:
+        report = vi.audit(Path(game.path).read_bytes())
+        rows.append((game, report))
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "roms": [
+                        {
+                            "file": g.filename,
+                            "modes": r.mode_count,
+                            "antialiasing_on": r.antialiasing_on,
+                            "dither_filter_on": r.dither_filter_on,
+                            "divot_on": r.divot_on,
+                            "gamma_dither_on": r.gamma_dither_on,
+                            "special_features_sites": r.special_features_sites,
+                            "standards": list(r.standards),
+                            "ctrl_values": [f"{c:08X}" for c in r.ctrl_values],
+                        }
+                        for g, r in rows
+                    ]
+                },
+                indent=1,
+            )
+        )
+        return 0
+
+    with_table = [(g, r) for g, r in rows if r.mode_count]
+    print(f"{'GAME':46} {'MODES':>6} {'AA-ON':>6} {'DIVOT':>6} {'SITES':>6} STD")
+    for game, report in rows:
+        if not report.mode_count:
+            print(
+                f"{game.stem[:46]:46} {'-':>6} {'-':>6} {'-':>6} "
+                f"{report.special_features_sites:>6} no video mode table found"
+            )
+            continue
+        print(
+            f"{game.stem[:46]:46} {report.mode_count:>6} {report.antialiasing_on:>6} "
+            f"{report.divot_on:>6} {report.special_features_sites:>6} "
+            f"{','.join(report.standards)}"
+        )
+
+    print(f"\n{len(with_table)} of {len(rows)} ROMs carry a recognisable video mode table.")
+    if with_table:
+        aa = sum(1 for _, r in with_table if r.antialiasing_on)
+        dv = sum(1 for _, r in with_table if r.divot_on)
+        df = sum(1 for _, r in with_table if r.dither_filter_on)
+        print(f"{aa} have anti-aliasing enabled in at least one mode.")
+        print(f"{dv} have the divot filter enabled in at least one mode.")
+        print(f"{df} have the dither filter enabled in the table itself.")
+    sites = sum(1 for _, r in rows if r.special_features_sites)
+    print(f"{sites} carry the osViSetSpecialFeatures routine.")
+    print("\nThe dither filter is the main source of blur, and it is normally absent")
+    print("from the mode table because the game switches it on at runtime through")
+    print("osViSetSpecialFeatures. Clearing it therefore means patching that routine,")
+    print("not the table. Anti-aliasing and the divot filter do live in the table.")
+    return 0
+
+
+def _cmd_vi_patch(args, requests) -> int:
+    if args.apply and not args.output:
+        print("--apply needs --output, so the source is never written over", file=sys.stderr)
+        return 2
+
+    found = _scan_or_exit(args.source)
+    out_dir = Path(args.output) if args.output else None
+    wanted = ", ".join(sorted(requests))
+    mode = "APPLYING" if args.apply else "DRY RUN, nothing will be written"
+    print(f"{mode}. Requested: {wanted} off.\n")
+
+    applied = refused = skipped = 0
+    for game in found.games:
+        data = Path(game.path).read_bytes()
+        result = vi.safe_patch(data, **requests)
+        if not result.applied:
+            if "already" in result.reason:
+                skipped += 1
+                print(f"  {game.stem[:52]:52} skipped, {result.reason}")
+            else:
+                refused += 1
+                print(f"  {game.stem[:52]:52} refused, {result.reason}")
+            continue
+        applied += 1
+        detail = f"{result.modes_changed} modes, boot chip {result.cic}, checksum resealed"
+        print(f"  {game.stem[:52]:52} {detail}")
+        if args.apply and out_dir is not None:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / game.filename).write_bytes(result.data)
+
+    print(f"\n{applied} would change, {skipped} already correct, {refused} refused.")
+    if not args.apply:
+        print("Nothing was written. Add --apply with --output to write patched copies.")
+    else:
+        print(f"Patched copies written to {out_dir}. The originals were not touched.")
+    print("\nThe dither filter is not offered here. It never appears in a mode table,")
+    print("so a switch for it would silently do nothing. Removing it needs an edit to")
+    print("osViSetSpecialFeatures, which this command does not perform.")
+    return 0
+
+
+def cmd_doctor(_args) -> int:
+    manifest = artifacts.load_default_manifest()
+    rules = compat.load_rules()
+    engine = render.find_engine()
+
+    print(f"artifact manifest   {len(manifest.by_sha256)} entries")
+    print(f"compatibility rules memory limit {rules.memory_mib} MiB")
+    print(f"TeX engine          {engine or 'none found'}")
+    if engine is None:
+        print("                    install tectonic for PDF output, a single binary")
+    probe = latex.document(title="Probe", subtitle="", body="ok")
+    print(f"latex builder       {len(probe)} byte document renders")
+    print(f"volume capacity     {image.usable_capacity()} bytes usable")
+    print(
+        f"granularity         {packing.units_for_capacity(image.usable_capacity())} games per disk"
+    )
+    return 0
+
+
+def cmd_db_update(_args) -> int:
+    """Fetch the save-type catalogue. This is the only command that uses the network."""
+    try:
+        written = db.update()
+    except OSError as error:
+        print(f"could not download the {db.SOURCE_NAME}: {error}")
+        print(f"fetch {db.SOURCE_URL} by hand and place it at {db.cache_path()}")
+        return 1
+    catalogue = db.load(written)
+    print(f"cached {written}")
+    print(
+        f"{len(catalogue.by_md5)} exact dumps and {len(catalogue.id_patterns)} game-code patterns"
+    )
+    print(f"source {db.SOURCE_NAME}, {db.SOURCE_LICENCE}, fetched rather than bundled")
+    return 0
+
+
+def cmd_merge(args) -> int:
+    """Fold the requested video change into a patch the game already needs."""
+    requests = _vi_requests(args)
+    if not requests:
+        print(
+            "nothing requested. Pass at least one of --no-aa, --no-divot, "
+            "--no-gamma-dither, --no-gamma"
+        )
+        return 2
+    if args.apply and not args.output:
+        print("refusing to write without --output, which names the merged patch")
+        return 2
+
+    rom = Path(args.rom).read_bytes()
+    existing = Path(args.patch).read_bytes()
+    try:
+        result = merge.merge(rom, existing, **requests)
+    except (aps.FormatError, aps.TargetMismatchError, merge.UnsafeMergeError) as error:
+        print(f"refused: {error}")
+        return 1
+
+    if not result.video_changes:
+        print("no video change was needed, so the existing patch already is the answer")
+        return 0
+
+    print(f"boot chip           {result.cic}")
+    print(f"existing records    {result.existing_records}")
+    print(f"video words changed {len(result.video_changes)}")
+    for offset, before, after in result.video_changes[:8]:
+        print(f"  0x{offset:06X}  {before:#010x} -> {after:#010x}")
+    if len(result.video_changes) > 8:
+        print(f"  and {len(result.video_changes) - 8} more")
+    print(
+        f"merged patch        {len(result.patch)} bytes, "
+        f"bound to the untouched ROM {aps.parse(result.patch).crc1:#010x}"
+    )
+
+    if not args.apply:
+        print("\ndry run. Pass --apply with --output to write the merged patch.")
+        return 0
+
+    Path(args.output).write_bytes(result.patch)
+    print(f"\nwrote {args.output}")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="z64kit", description=__doc__)
+    subparsers = parser.add_subparsers(dest="command")
+
+    scan_parser = subparsers.add_parser("scan", help="report what is in a folder")
+    scan_parser.add_argument("source")
+    scan_parser.add_argument("--json", action="store_true")
+    scan_parser.set_defaults(func=cmd_scan)
+
+    plan_parser = subparsers.add_parser("plan", help="show which games land on which disk")
+    plan_parser.add_argument("source")
+    plan_parser.add_argument("--json", action="store_true")
+    plan_parser.set_defaults(func=cmd_plan)
+
+    org = subparsers.add_parser(
+        "organise", help="write one folder per disk, with 8.3 names, no images"
+    )
+    org.add_argument("source")
+    org.add_argument("output")
+    org.add_argument("--force", action="store_true", help="write over existing content")
+    org.add_argument(
+        "--patches", default=None, help="folder of patch files to match against the ROMs"
+    )
+    org.set_defaults(func=cmd_organise)
+
+    build_cmd = subparsers.add_parser("build", help="write the disk images")
+    build_cmd.add_argument("source")
+    build_cmd.add_argument("output")
+    build_cmd.add_argument(
+        "--patches", default=None, help="folder of patch files to match against the ROMs"
+    )
+    build_cmd.set_defaults(func=cmd_build)
+
+    inv = subparsers.add_parser("inventory", help="record which cartridges you have")
+    inv.add_argument("source")
+    inv.add_argument("--file", default="z64kit-inventory.json")
+    inv.add_argument("--own", action="append", default=[])
+    inv.add_argument("--show", action="store_true")
+    inv.set_defaults(func=cmd_inventory)
+
+    rep = subparsers.add_parser("report", help="write the printable catalogue")
+    rep.add_argument("source")
+    rep.add_argument("output")
+    rep.add_argument("--inventory", default=None)
+    rep.add_argument("--no-pdf", action="store_true")
+    rep.set_defaults(func=cmd_report)
+
+    vic = subparsers.add_parser("vi", help="report the video configuration in each ROM, read only")
+    vic.add_argument("source")
+    vic.add_argument("--json", action="store_true")
+    vic.add_argument("--no-aa", action="store_true", help="disable anti-aliasing")
+    vic.add_argument("--no-divot", action="store_true", help="disable the divot filter")
+    vic.add_argument("--no-gamma-dither", action="store_true", help="disable gamma dithering")
+    vic.add_argument("--no-gamma", action="store_true", help="disable gamma correction")
+    vic.add_argument("--output", default=None, help="folder for patched copies")
+    vic.add_argument("--apply", action="store_true", help="actually write, otherwise dry run")
+    vic.set_defaults(func=cmd_vi)
+
+    mg = subparsers.add_parser(
+        "merge", help="fold a video change into a patch the game already needs"
+    )
+    mg.add_argument("rom")
+    mg.add_argument("patch")
+    mg.add_argument("--no-aa", action="store_true", help="disable anti-aliasing")
+    mg.add_argument("--no-divot", action="store_true", help="disable the divot filter")
+    mg.add_argument("--no-gamma-dither", action="store_true", help="disable gamma dithering")
+    mg.add_argument("--no-gamma", action="store_true", help="disable gamma correction")
+    mg.add_argument("--output", default=None, help="path for the merged patch")
+    mg.add_argument("--apply", action="store_true", help="actually write, otherwise dry run")
+    mg.set_defaults(func=cmd_merge)
+
+    dbu = subparsers.add_parser(
+        "db-update", help="download the save-type catalogue, the only networked command"
+    )
+    dbu.set_defaults(func=cmd_db_update)
+
+    doc = subparsers.add_parser("doctor", help="report what is installed and what is missing")
+    doc.set_defaults(func=cmd_doctor)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if not getattr(args, "func", None):
+        parser.print_usage()
+        return 2
+    try:
+        return args.func(args)
+    except SystemExit as exc:
+        return int(exc.code or 0)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
