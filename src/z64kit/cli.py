@@ -486,7 +486,47 @@ def _cmd_vi_patch(args, requests) -> int:
     return 0
 
 
-def cmd_doctor(_args) -> int:
+def _report_artifact_folder(folder: Path, manifest) -> None:
+    """Print the folder's state. Shared with `artifacts` so the two cannot disagree."""
+    report = artifacts.inspect_folder(folder, manifest)
+    wanted = artifacts.folder_entries(manifest)
+    by_name = {e.filename: e for e in wanted}
+
+    print(f"\nsupplied files    {folder}")
+    print(f"                  {len(report.present)} of {len(wanted)} verified")
+
+    if report.missing:
+        print(f"\n  missing ({len(report.missing)}). Put these in {folder}:")
+        for name in report.missing:
+            entry = by_name[name]
+            label = entry.game or entry.description or entry.kind
+            print(f"    {name:16} {entry.size:>9,} bytes  {label}")
+            print(f"    {'':16} {entry.sha256}")
+
+    if report.wrong:
+        print(f"\n  present but not what the manifest expects ({len(report.wrong)}):")
+        for name, reason in sorted(report.wrong.items()):
+            print(f"    {name:16} {reason}")
+            print(f"    {'':16} expected {by_name[name].sha256}")
+
+    if report.misnamed:
+        print(f"\n  right file, wrong name ({len(report.misnamed)}). Rename these:")
+        for found, should_be in sorted(report.misnamed.items()):
+            print(f"    {found:16} rename to {should_be}")
+
+    if report.unknown:
+        print(f"\n  not in the manifest ({len(report.unknown)}), ignored:")
+        for name in report.unknown:
+            print(f"    {name}")
+
+    if report.complete:
+        print("\n  everything the manifest names is present and verified.")
+    else:
+        print("\n  `z64kit artifacts` gates on this and exits non-zero. Digests for every")
+        print(f"  expected file are in {folder / 'README.md'}.")
+
+
+def cmd_doctor(args) -> int:
     manifest = artifacts.load_default_manifest()
     rules = compat.load_rules()
     engine = render.find_engine()
@@ -502,6 +542,8 @@ def cmd_doctor(_args) -> int:
     print(
         f"granularity         {packing.units_for_capacity(image.usable_capacity())} games per disk"
     )
+
+    _report_artifact_folder(Path(args.folder or artifacts.FOLDER_NAME), manifest)
     return 0
 
 
@@ -721,6 +763,11 @@ def build_parser() -> argparse.ArgumentParser:
     dbu.set_defaults(func=cmd_db_update)
 
     doc = subparsers.add_parser("doctor", help="report what is installed and what is missing")
+    doc.add_argument(
+        "--folder",
+        default=None,
+        help=f"where the supplied files live, default {artifacts.FOLDER_NAME}/",
+    )
     doc.set_defaults(func=cmd_doctor)
 
     return parser

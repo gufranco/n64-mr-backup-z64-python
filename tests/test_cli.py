@@ -838,3 +838,123 @@ class TestArtifactsCommandReporting:
 
         assert code == 0
         assert jsonlib.loads(capsys.readouterr().out)["complete"] is True
+
+
+class TestDoctorChecksTheArtifactFolder:
+    def test_reports_how_many_of_the_required_files_verified(self, tmp_path, capsys):
+        from z64kit import cli
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+
+        assert "0 of 15 verified" in capsys.readouterr().out
+
+    def test_lists_every_missing_file_by_name(self, tmp_path, capsys):
+        from z64kit import artifacts, cli
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+        printed = capsys.readouterr().out
+
+        for entry in artifacts.folder_entries(artifacts.load_default_manifest()):
+            assert entry.filename in printed
+
+    def test_gives_the_digest_of_each_missing_file(self, tmp_path, capsys):
+        from z64kit import artifacts, cli
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+        printed = capsys.readouterr().out
+
+        for entry in artifacts.folder_entries(artifacts.load_default_manifest()):
+            assert entry.sha256 in printed
+
+    def test_gives_the_size_of_each_missing_file(self, tmp_path, capsys):
+        from z64kit import artifacts, cli
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+        printed = capsys.readouterr().out.replace(",", "")
+
+        for entry in artifacts.folder_entries(artifacts.load_default_manifest()):
+            assert str(entry.size) in printed
+
+    def test_names_the_folder_it_checked(self, tmp_path, capsys):
+        from z64kit import cli
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+
+        assert str(tmp_path) in capsys.readouterr().out
+
+    def test_points_at_the_command_that_gates_on_this(self, tmp_path, capsys):
+        from z64kit import cli
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+
+        assert "z64kit artifacts" in capsys.readouterr().out
+
+    def test_stays_a_diagnostic_and_exits_zero_even_when_files_are_missing(self, tmp_path, capsys):
+        from z64kit import cli
+
+        code = cli.main(["doctor", "--folder", str(tmp_path)])
+        capsys.readouterr()
+
+        assert code == 0
+
+    def test_reports_a_file_present_under_the_wrong_name(self, tmp_path, capsys):
+        from z64kit import artifacts, cli
+
+        entry = artifacts.folder_entries(artifacts.load_default_manifest())[0]
+        source = Path("patches") / entry.filename
+        if not source.exists():
+            pytest.skip("the real payload is not present on this machine")
+        (tmp_path / "misnamed.aps").write_bytes(source.read_bytes())
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+        printed = capsys.readouterr().out
+
+        assert "misnamed.aps" in printed
+        assert "rename" in printed.lower()
+
+    def test_reports_a_file_whose_contents_are_wrong(self, tmp_path, capsys):
+        from z64kit import artifacts, cli
+
+        entry = artifacts.folder_entries(artifacts.load_default_manifest())[0]
+        (tmp_path / entry.filename).write_bytes(b"\x00" * entry.size)
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+
+        assert entry.filename in capsys.readouterr().out
+
+    def test_says_so_when_everything_verifies(self, tmp_path, capsys):
+        from z64kit import artifacts, cli
+
+        manifest = artifacts.load_default_manifest()
+        for entry in artifacts.folder_entries(manifest):
+            source = Path("patches") / entry.filename
+            if not source.exists():
+                pytest.skip("the real payloads are not present on this machine")
+            (tmp_path / entry.filename).write_bytes(source.read_bytes())
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+        printed = capsys.readouterr().out
+
+        assert "15 of 15 verified" in printed
+        assert "missing" not in printed.lower()
+
+    def test_a_missing_folder_is_reported_rather_than_raised(self, tmp_path, capsys):
+        from z64kit import cli
+
+        code = cli.main(["doctor", "--folder", str(tmp_path / "absent")])
+
+        assert code == 0
+        assert "0 of 15 verified" in capsys.readouterr().out
+
+    def test_both_commands_agree_on_what_is_missing(self, tmp_path, capsys):
+        """One inspection function, so doctor and artifacts cannot disagree."""
+        from z64kit import cli
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+        from_doctor = capsys.readouterr().out
+        cli.main(["artifacts", "--folder", str(tmp_path)])
+        from_artifacts = capsys.readouterr().out
+
+        for name in ("cc-usa.aps", "zoot-usa.aps", "swep1rus.eep"):
+            assert name in from_doctor
+            assert name in from_artifacts

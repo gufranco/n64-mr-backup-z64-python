@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE.txt)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-586-brightgreen?style=flat-square)](tests)
+[![Tests](https://img.shields.io/badge/tests-598-brightgreen?style=flat-square)](tests)
 [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen?style=flat-square)](pyproject.toml)
 
 </div>
@@ -20,7 +20,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**11** commands · **22** modules · **586** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
+**11** commands · **22** modules · **598** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
 
 ```console
 $ z64kit doctor
@@ -233,7 +233,7 @@ z64kit merge game.z64 game.aps --no-aa --output merged.aps --apply
 | `merge` | Fold a video change into a patch the game already needs |
 | `artifacts` | Check the supplied-artifact folder against the manifest |
 | `db-update` | Download the save-type catalogue. The only command that uses the network |
-| `doctor` | Report what is installed, what is missing, and what each gap costs |
+| `doctor` | Report what is installed, and check the supplied files against the manifest |
 
 `organise` and `build` are two routes to the same layout. Folders are useful for copying to a disk
 by hand, for checking the naming before committing to an image, and for a drive the tool cannot
@@ -267,7 +267,7 @@ patches/          # where you put the files you supply. Generated README, no pay
 
 | Suite | Command | Covers |
 |:------|:--------|:-------|
-| Everything | `pytest` | 586 tests, coverage gate at 95% |
+| Everything | `pytest` | 598 tests, coverage gate at 95% |
 | Skip the ones needing game data | `pytest -m "not artifacts"` | Explicit form of what happens anyway when no collection is present |
 | Only the ones needing game data | `pytest -m artifacts` | Byte-for-byte image reproduction. Skips unless `Z64KIT_LIBRARY` and `Z64KIT_GOLDEN` resolve |
 | Lint and format | `ruff check src tests && ruff format --check src tests` | Style and static analysis |
