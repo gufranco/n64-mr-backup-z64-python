@@ -86,6 +86,29 @@ class PatchFolderMissingError(FileNotFoundError):
     """Raised when a named patch folder is absent, rather than yielding no patches."""
 
 
+DATABASE_BASE, DATABASE_EXT = artifacts.PATCH_DATABASE.upper().split(".")
+
+
+def _no_database_note() -> str:
+    return (
+        f"note: {artifacts.PATCH_DATABASE} was not found, so nothing will carry the patch "
+        "database. Games that rely on it will load unpatched."
+    )
+
+
+def _patch_database(folder: str | None) -> bytes | None:
+    """The unit's patch database, to be copied to the root of every disk.
+
+    The unit reads this file itself and finds the right patch inside it, so placing
+    it verbatim sidesteps the question of how it matches entirely. One file per disk
+    replaces the seventy-five it contains.
+    """
+    if not folder:
+        return None
+    candidate = Path(folder) / artifacts.PATCH_DATABASE
+    return candidate.read_bytes() if candidate.is_file() else None
+
+
 def _patch_library(folder: str | None) -> dict[bytes, list[tuple[str, str, bytes]]]:
     """Index a patch folder by the 64 byte header of the ROM each patch targets.
 
@@ -277,6 +300,9 @@ def cmd_build(args) -> int:
     names = _names(found)
     layout = _layout(found)
     patches = _patch_library(getattr(args, "patches", None))
+    database = _patch_database(getattr(args, "patches", None))
+    if database is None:
+        print(_no_database_note())
 
     disks = []
     for name, games in layout:
@@ -297,6 +323,8 @@ def cmd_build(args) -> int:
             for stem, extension, blob in _patches_for(patches, game):
                 spot = volume.add_file(writer.ROOT, base, extension, blob)
                 placed.append({"source": f"{stem}.{extension.lower()}", "name": spot.name})
+        if database is not None:
+            volume.add_file(writer.ROOT, DATABASE_BASE, DATABASE_EXT, database)
         volume.sort_directories()
 
         failures = volume.verify()
@@ -332,11 +360,17 @@ def cmd_organise(args) -> int:
 
     names = _names(found)
     patches = _patch_library(getattr(args, "patches", None))
+    database = _patch_database(getattr(args, "patches", None))
+    if database is None:
+        print(_no_database_note())
     disks = []
     for name, games in _layout(found):
         folder = out_dir / name
         folder.mkdir(exist_ok=True)
         written = []
+        if database is not None:
+            (folder / artifacts.PATCH_DATABASE).write_bytes(database)
+            written.append({"source": artifacts.PATCH_DATABASE, "name": artifacts.PATCH_DATABASE})
         for game in sorted(games, key=lambda g: (-g.size, g.filename)):
             base = names[game.filename]
             target = folder / f"{base}.{game.true_extension}"

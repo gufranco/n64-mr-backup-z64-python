@@ -57,7 +57,7 @@ class TestRenderedDocument:
 
         text = artifacts.render_folder_readme(manifest)
 
-        expected = [e for e in manifest.entries() if e.kind in artifacts.FOLDER_KINDS]
+        expected = artifacts.folder_entries(manifest)
         assert expected
         for entry in expected:
             assert entry.filename in text
@@ -67,18 +67,16 @@ class TestRenderedDocument:
 
         text = artifacts.render_folder_readme(manifest)
 
-        for entry in manifest.entries():
-            if entry.kind in artifacts.FOLDER_KINDS:
-                assert entry.sha256 in text
+        for entry in artifacts.folder_entries(manifest):
+            assert entry.sha256 in text
 
     def test_carries_the_exact_size_in_bytes(self):
         manifest = artifacts.load_default_manifest()
 
         text = artifacts.render_folder_readme(manifest).replace(",", "")
 
-        for entry in manifest.entries():
-            if entry.kind in artifacts.FOLDER_KINDS:
-                assert str(entry.size) in text
+        for entry in artifacts.folder_entries(manifest):
+            assert str(entry.size) in text
 
     def test_names_the_game_each_patch_targets(self):
         text = artifacts.render_folder_readme(artifacts.load_default_manifest())
@@ -88,7 +86,7 @@ class TestRenderedDocument:
     def test_states_the_target_checksums_for_patches(self):
         text = artifacts.render_folder_readme(artifacts.load_default_manifest())
 
-        assert "95286EB4" in text
+        assert "C2E9AA9A" in text
 
     def test_lists_a_companion_save_alongside_its_patch(self):
         text = artifacts.render_folder_readme(artifacts.load_default_manifest())
@@ -343,10 +341,10 @@ class TestCompanionRowsAreNotBlank:
     def test_a_patch_row_names_the_game_and_its_binding(self):
         text = artifacts.render_folder_readme(artifacts.load_default_manifest())
 
-        row = next(line for line in text.splitlines() if "`swep1rus.aps`" in line)
+        row = next(line for line in text.splitlines() if "`dx-btusc.aps`" in line)
 
-        assert "Star Wars" in row
-        assert "72F70398" in row
+        assert "Banjo-Tooie" in row
+        assert "C2E9AA9A" in row
 
     def test_a_save_row_says_it_is_matched_by_its_own_digest(self):
         text = artifacts.render_folder_readme(artifacts.load_default_manifest())
@@ -397,9 +395,9 @@ class TestOnlyWhatTheCollectionNeeds:
     def test_a_filter_narrows_what_counts_as_missing(self, tmp_path):
         manifest = artifacts.load_default_manifest()
 
-        report = artifacts.inspect_folder(tmp_path, manifest, required={"cc-usa.aps"})
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"dx-btusc.aps"})
 
-        assert report.missing == ("cc-usa.aps",)
+        assert set(report.missing) == {"dx-btusc.aps"}
 
     def test_an_empty_filter_means_nothing_is_missing(self, tmp_path):
         manifest = artifacts.load_default_manifest()
@@ -413,37 +411,54 @@ class TestOnlyWhatTheCollectionNeeds:
         from pathlib import Path
 
         manifest = artifacts.load_default_manifest()
+        for name in ("dx-btusc.aps", "kgsgood.aps"):
+            source = Path("patches") / name
+            if not source.exists():
+                pytest.skip("the real payloads are not present on this machine")
+            (tmp_path / name).write_bytes(source.read_bytes())
+
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"kgsgood.aps"})
+
+        assert "dx-btusc.aps" in report.present
+
+    def test_a_patch_the_database_carries_is_verified_not_called_unknown(self, tmp_path):
+        from pathlib import Path
+
+        manifest = artifacts.load_default_manifest()
         source = Path("patches") / "cc-usa.aps"
         if not source.exists():
             pytest.skip("the real payload is not present on this machine")
         (tmp_path / "cc-usa.aps").write_bytes(source.read_bytes())
 
-        report = artifacts.inspect_folder(tmp_path, manifest, required={"zoot-usa.aps"})
+        report = artifacts.inspect_folder(tmp_path, manifest)
 
         assert "cc-usa.aps" in report.present
+        assert "cc-usa.aps" not in report.unknown
 
     def test_a_wrong_file_outside_the_filter_is_still_reported(self, tmp_path):
         manifest = artifacts.load_default_manifest()
-        (tmp_path / "cc-usa.aps").write_bytes(b"\x00" * 10)
+        (tmp_path / "dx-btusc.aps").write_bytes(b"\x00" * 10)
 
-        report = artifacts.inspect_folder(tmp_path, manifest, required={"zoot-usa.aps"})
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"kgsgood.aps"})
 
-        assert "cc-usa.aps" in report.wrong
+        assert "dx-btusc.aps" in report.wrong
 
 
 class TestRequiredForCollection:
     def test_a_game_in_the_collection_requires_its_patch(self):
         manifest = artifacts.load_default_manifest()
-        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "cc-usa.aps")
+        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "dx-btusc.aps")
 
         required = artifacts.required_for(manifest, {(entry.target_crc1, entry.target_crc2)})
 
-        assert "cc-usa.aps" in required
+        assert "dx-btusc.aps" in required
 
     def test_a_game_not_in_the_collection_requires_nothing(self):
         manifest = artifacts.load_default_manifest()
 
-        assert artifacts.required_for(manifest, {("DEADBEEF", "CAFEBABE")}) == set()
+        assert artifacts.required_for(manifest, {("DEADBEEF", "CAFEBABE")}) == {
+            artifacts.PATCH_DATABASE
+        }
 
     def test_a_non_aps_patch_requires_its_header_sidecar(self):
         manifest = artifacts.load_default_manifest()
@@ -455,7 +470,7 @@ class TestRequiredForCollection:
 
     def test_an_aps_patch_needs_no_header_because_it_carries_its_own_binding(self):
         manifest = artifacts.load_default_manifest()
-        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "zoot-usa.aps")
+        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "kgsgood.aps")
 
         required = artifacts.required_for(manifest, {(entry.target_crc1, entry.target_crc2)})
 
@@ -463,18 +478,19 @@ class TestRequiredForCollection:
 
     def test_a_companion_save_is_required_with_its_patch(self):
         manifest = artifacts.load_default_manifest()
-        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "dk64-usa.aps")
+        entry = next(e for e in manifest.entries() if e.filename == "dk64-usa.aps")
 
         required = artifacts.required_for(manifest, {(entry.target_crc1, entry.target_crc2)})
 
         assert "dk64-usa.ram" in required
+        assert "dk64-usa.aps" not in required
 
     def test_matching_is_case_insensitive_on_the_checksum(self):
         manifest = artifacts.load_default_manifest()
-        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "cc-usa.aps")
+        entry = next(e for e in artifacts.folder_entries(manifest) if e.filename == "dx-btusc.aps")
         lowered = (entry.target_crc1.lower(), entry.target_crc2.lower())
 
-        assert "cc-usa.aps" in artifacts.required_for(manifest, {lowered})
+        assert "dx-btusc.aps" in artifacts.required_for(manifest, {lowered})
 
 
 class TestVerifiedCountRespectsTheFilter:
@@ -482,30 +498,30 @@ class TestVerifiedCountRespectsTheFilter:
         from pathlib import Path
 
         manifest = artifacts.load_default_manifest()
-        for name in ("cc-usa.aps", "zoot-usa.aps"):
+        for name in ("dx-btusc.aps", "kgsgood.aps"):
             source = Path("patches") / name
             if not source.exists():
                 pytest.skip("the real payloads are not present on this machine")
             (tmp_path / name).write_bytes(source.read_bytes())
 
-        report = artifacts.inspect_folder(tmp_path, manifest, required={"cc-usa.aps"})
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"dx-btusc.aps"})
 
-        assert report.needed == ("cc-usa.aps",)
-        assert set(report.present) == {"cc-usa.aps", "zoot-usa.aps"}
+        assert "dx-btusc.aps" in report.needed
+        assert set(report.present) == {"dx-btusc.aps", "kgsgood.aps"}
 
     def test_needed_present_counts_only_what_was_asked_for(self, tmp_path):
         from pathlib import Path
 
         manifest = artifacts.load_default_manifest()
-        for name in ("cc-usa.aps", "zoot-usa.aps"):
+        for name in ("dx-btusc.aps", "kgsgood.aps"):
             source = Path("patches") / name
             if not source.exists():
                 pytest.skip("the real payloads are not present on this machine")
             (tmp_path / name).write_bytes(source.read_bytes())
 
-        report = artifacts.inspect_folder(tmp_path, manifest, required={"cc-usa.aps"})
+        report = artifacts.inspect_folder(tmp_path, manifest, required={"dx-btusc.aps"})
 
-        assert report.needed_present == ("cc-usa.aps",)
+        assert report.needed_present == ("dx-btusc.aps",)
 
     def test_with_no_filter_needed_is_every_folder_entry(self, tmp_path):
         manifest = artifacts.load_default_manifest()

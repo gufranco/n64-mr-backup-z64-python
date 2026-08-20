@@ -165,6 +165,15 @@ A handful of games cannot save on the Z64 without a small extra file, and two or
 three will not boot without one. The program cannot include these files, so you
 have to supply them yourself.
 
+**The important one is a single file called `z64patch.dat`.** It is the Z64's own
+patch collection, it covers 75 games on its own, and the Z64 knows how to read it.
+The program copies it onto every disk it makes, because the Z64 only finds it if it
+sits in the disk's root folder next to the games. If it is missing, the program
+still works but says so, and games that needed a patch will load unpatched, which
+usually means they cannot save.
+
+Beyond that file, only thirteen others are ever needed.
+
 Run this to see exactly what is expected:
 
 ```

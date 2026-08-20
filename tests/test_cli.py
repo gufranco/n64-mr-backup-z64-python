@@ -723,7 +723,7 @@ class TestArtifactsCommand:
 
         assert code == 1
         assert "missing" in printed.lower()
-        assert "cc-usa.aps" in printed
+        assert "z64patch.dat" in printed
 
     def test_names_the_folder_it_looked_in(self, tmp_path, capsys):
         from z64kit import cli
@@ -735,11 +735,11 @@ class TestArtifactsCommand:
     def test_flags_a_file_that_does_not_match_its_digest(self, tmp_path, capsys):
         from z64kit import cli
 
-        (tmp_path / "cc-usa.aps").write_bytes(b"\x00" * 92484)
+        (tmp_path / "dx-btusc.aps").write_bytes(b"\x00" * 121964)
 
         cli.main(["artifacts", "--folder", str(tmp_path)])
 
-        assert "cc-usa.aps" in capsys.readouterr().out
+        assert "dx-btusc.aps" in capsys.readouterr().out
 
     def test_regenerates_the_document_from_the_manifest(self, tmp_path, capsys):
         from z64kit import artifacts, cli
@@ -762,7 +762,7 @@ class TestArtifactsCommand:
 
         payload = json.loads(capsys.readouterr().out)
         assert payload["complete"] is False
-        assert "cc-usa.aps" in payload["missing"]
+        assert "z64patch.dat" in payload["missing"]
 
 
 class TestPatchFolderIsNotSilentlySkipped:
@@ -963,7 +963,7 @@ class TestDoctorChecksTheArtifactFolder:
         cli.main(["artifacts", "--folder", str(tmp_path)])
         from_artifacts = capsys.readouterr().out
 
-        for name in ("cc-usa.aps", "zoot-usa.aps", "swep1rus.eep"):
+        for name in ("dx-btusc.aps", "kgsgood.aps", "swep1rus.eep"):
             assert name in from_doctor
             assert name in from_artifacts
 

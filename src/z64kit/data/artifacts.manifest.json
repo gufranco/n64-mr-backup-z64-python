@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "note": "Identification only. This file lists the name, size and digests of artifacts the user must supply themselves. It contains no payload bytes and names no source for obtaining them. Scope is USA releases. Filenames are lowercase throughout. Every patch was applied to the ROM it targets and the resulting header checksum recorded in checksum_after: valid-<chip> means the patched ROM verifies under that boot chip, matches-no-boot-chip means it does not verify under any known one. Whether the unit enforces that check is untested on hardware.",
+ "note": "Identification only. This file lists the name, size and digests of artifacts the user must supply themselves. It contains no payload bytes and names no source for obtaining them. Scope is USA releases. Filenames are lowercase throughout. in_patch_database marks a patch the unit already finds inside z64patch.dat, so it needs no separate copy; the database itself is the file to supply. checksum_after records the header checksum of the ROM once the patch is applied.",
  "entries": [
   {
    "name": "z64bios220",
@@ -106,7 +106,8 @@
    "sha256": "d37b4019dcc0e397c00e9fd0b7abf4615d0b52c3332e38e142f1f5a9d5ef5ffe",
    "crc32": "20433960",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "banjo-hdr",
@@ -126,7 +127,8 @@
    "sha256": "512591bfacbf450928e86905607762b9544e96e9d69c602ec2f6ddf7bc60237c",
    "crc32": "65d53f49",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "bos99-hdr",
@@ -136,7 +138,8 @@
    "sha256": "4577b01c68f8ef1e09f491519e3c30fbd25dc43d340f612ad98595c08460a47b",
    "crc32": "8ded548e",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "btanxvfx-hdr",
@@ -146,7 +149,8 @@
    "sha256": "198cdff3e1500b00101e4d5ad5889e60f2da012427b59deca95dcecc6dc935b8",
    "crc32": "da00b37b",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "buckpfx-hdr",
@@ -156,7 +160,8 @@
    "sha256": "61aef3d0660c0a7ff1d7a1cce47f00594a3e4f2ad54a91592ca71dfbaa0ab9bc",
    "crc32": "cf45b9e9",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "chmtwst2-hdr",
@@ -166,7 +171,8 @@
    "sha256": "8ce8cf1f0182ca477a2a8bf441b5b86c40558e21824cf711cb44f3df301bcfac",
    "crc32": "f49934d8",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "davfx-hdr",
@@ -176,7 +182,8 @@
    "sha256": "ae8047daeabbc09ea649f658c706b14ca9e276dc8e1b22e30d75ce684b2df743",
    "crc32": "0c5defd1",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "fdvfx-hdr",
@@ -186,7 +193,8 @@
    "sha256": "80c01d16453c275c2cea73a1b48e7aae77d89ccaa2069f0136bbb32c93ea3a39",
    "crc32": "7c7a66af",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "fsh99sfx-hdr",
@@ -196,7 +204,8 @@
    "sha256": "af58a13d5fc417786715baa9f781f259d1e6c7d956f14f428fc7be60cd0a992b",
    "crc32": "bbb1a852",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "fzerousa-hdr",
@@ -206,7 +215,8 @@
    "sha256": "722d7053b718fa62558f052ae34ab9fa2eed2a2642c1ae826e70ff321cce204d",
    "crc32": "ed13e955",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "gnvfx-hdr",
@@ -216,7 +226,8 @@
    "sha256": "ee8cd8e64700dd0125ac6eb96df35082707f3f03c10ea0b30cfe2ea949673a61",
    "crc32": "3189734b",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "iss98vfx-hdr",
@@ -226,7 +237,8 @@
    "sha256": "fba2bade95c0c5aeda70fded7e56558a247e2ecadd828d3047d3f17fe369b947",
    "crc32": "4d7243a3",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "kgs-ags-hdr",
@@ -236,7 +248,8 @@
    "sha256": "3c5a4e1319ccb4bcba3dafe89f4d12d8ab81f791d4e7d7c535702a0a815bbc10",
    "crc32": "72d14c8c",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "kombat4-hdr",
@@ -246,7 +259,8 @@
    "sha256": "23a78d9a8e7f8519c29f0277785867c901915fe04daf5b9905e4f06a375c951f",
    "crc32": "028a5328",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "micromac-hdr",
@@ -256,7 +270,8 @@
    "sha256": "90df92a5a3a6c40dfb39720af61479dda6eff5ae7ac323f055469a5c85842067",
    "crc32": "ace0e21b",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "mlb-kgjr-hdr",
@@ -266,7 +281,8 @@
    "sha256": "7dc18751c660a66d21babea39e7af7d1478e0290a603286ab394cabbc6bacf55",
    "crc32": "0d3d9e84",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "mpusa-hdr",
@@ -276,7 +292,8 @@
    "sha256": "cf86e63eb42cc6a3b1e3ea7e93b520db5eefd69acf9d25910e29ceb29d08bcb1",
    "crc32": "7807ac3e",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "nascar99-hdr",
@@ -286,7 +303,8 @@
    "sha256": "23163c29e414141b8733b44f6dafe38cc5503ff669f0e17e1f0cb1092af5d497",
    "crc32": "20482a8e",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "nba99-hdr",
@@ -296,7 +314,8 @@
    "sha256": "b1f836660cfa9843e4708a805a6a498901987cc1102f92023b4b19421907bf23",
    "crc32": "34049b4f",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "nba99sfx-hdr",
@@ -306,7 +325,8 @@
    "sha256": "026b3428553204f11e24c25b0dbffd2c68fdcf81ae7ae9dceadf7d3fe070ef2f",
    "crc32": "866ec7ff",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "nba_cs-hdr",
@@ -326,7 +346,8 @@
    "sha256": "eb1c2656c3569b5aec7f7292b067f82d7da81dd5ed6940ffa70c869544207fdf",
    "crc32": "cdc6ec24",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "rugrt-hdr",
@@ -336,7 +357,8 @@
    "sha256": "627c4bb6159c8e1e0e434ec5d5e56cd92de966f729981d63df17513ecdcc9dc5",
    "crc32": "ad7538e6",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "scarspfx-hdr",
@@ -346,7 +368,8 @@
    "sha256": "ca13998d2ab9c221f558f545ebfbfb7f4f02de0014b8c5d16f80becf4ac2737b",
    "crc32": "31eab48c",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "ssvfx-hdr",
@@ -356,7 +379,8 @@
    "sha256": "372249e6e6b509f3640248222529a85502ddfcbb9c3396d73254b1dd5f3ce506",
    "crc32": "df97ad09",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "vchess-hdr",
@@ -366,7 +390,8 @@
    "sha256": "1a2a59a4f4286e7a9168863b3dd5169c1fa0923c5ccfc67a99d226dba767cbfa",
    "crc32": "2db81299",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "wcwn-hdr",
@@ -376,7 +401,8 @@
    "sha256": "97476a60070050adcf846494e549ecee40d1b6f3bf2aeb6d56ea2d0c65f31d58",
    "crc32": "bed0e0d1",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "wcwpfx-hdr",
@@ -386,7 +412,8 @@
    "sha256": "7a8836fd3fbecff3d4e891dfa0a341b8e2f047158a54a7bd2d34ccd9ab40b9d6",
    "crc32": "e67be363",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "wg3dvfx-hdr",
@@ -396,7 +423,8 @@
    "sha256": "2eba23b94d4c432796e31af02cead6ddd170c4d89e3875dec061b6dc41a1646a",
    "crc32": "8422410e",
    "provenance": "ships beside its patch",
-   "description": "Target ROM header, needed to match a non-APS patch"
+   "description": "Target ROM header, needed to match a non-APS patch",
+   "in_patch_database": true
   },
   {
    "name": "yoshi_e-hdr",
@@ -424,7 +452,8 @@
    ],
    "region": "USA",
    "game_code": "NB3E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "bass",
@@ -439,7 +468,8 @@
    "game": "In-Fisherman - Bass Hunter 64 (USA)",
    "region": "USA",
    "game_code": "NFHE",
-   "checksum_after": "valid-6102"
+   "checksum_after": "valid-6102",
+   "in_patch_database": true
   },
   {
    "name": "bh",
@@ -457,7 +487,8 @@
    ],
    "region": "USA",
    "game_code": "NBHE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "bos99",
@@ -475,7 +506,8 @@
    ],
    "region": "USA",
    "game_code": "NHOE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "btanxvfx",
@@ -493,7 +525,8 @@
    ],
    "region": "USA",
    "game_code": "NBXE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "buckpfx",
@@ -511,7 +544,8 @@
    ],
    "region": "USA",
    "game_code": "NBLE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "cali",
@@ -526,7 +560,8 @@
    "game": "CAL SPEED",
    "region": "USA",
    "game_code": "NCLE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "cc-usa",
@@ -542,7 +577,8 @@
    "description": "No save fix",
    "region": "USA",
    "game_code": "NCCE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "chmtwst2",
@@ -560,7 +596,8 @@
    ],
    "region": "USA",
    "game_code": "N2VE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "davfx",
@@ -578,7 +615,8 @@
    ],
    "region": "USA",
    "game_code": "NGAE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "dk64-usa",
@@ -597,7 +635,8 @@
    ],
    "region": "USA",
    "game_code": "NDOE",
-   "checksum_after": "valid-6102"
+   "checksum_after": "valid-6102",
+   "in_patch_database": true
   },
   {
    "name": "dx-btusc",
@@ -629,7 +668,8 @@
    "description": "Boot and save fix",
    "region": "USA",
    "game_code": "NMXE",
-   "checksum_after": "valid-6102"
+   "checksum_after": "valid-6102",
+   "in_patch_database": true
   },
   {
    "name": "fdvfx",
@@ -647,7 +687,8 @@
    ],
    "region": "USA",
    "game_code": "NFDE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "fsh99sfx",
@@ -665,7 +706,8 @@
    ],
    "region": "USA",
    "game_code": "NF9E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "fzerousa",
@@ -683,7 +725,8 @@
    ],
    "region": "USA",
    "game_code": "CFZE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "gnvfx",
@@ -701,7 +744,8 @@
    ],
    "region": "USA",
    "game_code": "NGNE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "iss98vfx",
@@ -719,7 +763,8 @@
    ],
    "region": "USA",
    "game_code": "NWSE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "jfg-usa",
@@ -738,7 +783,8 @@
    ],
    "region": "USA",
    "game_code": "NJFE",
-   "checksum_after": "valid-6102"
+   "checksum_after": "valid-6102",
+   "in_patch_database": true
   },
   {
    "name": "kgs-ags",
@@ -756,7 +802,8 @@
    ],
    "region": "USA",
    "game_code": "NKJE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "kgsgood",
@@ -790,7 +837,8 @@
    ],
    "region": "USA",
    "game_code": "NM4E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "mglf-usa",
@@ -806,7 +854,8 @@
    "description": "Save fix",
    "region": "USA",
    "game_code": "NMFE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "micromac",
@@ -824,7 +873,8 @@
    ],
    "region": "USA",
    "game_code": "NV3E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "mlb-kgjr",
@@ -842,7 +892,8 @@
    ],
    "region": "USA",
    "game_code": "NKGE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "mpusa",
@@ -860,7 +911,8 @@
    ],
    "region": "USA",
    "game_code": "CLBE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "mten-usa",
@@ -876,7 +928,8 @@
    "description": "Boot and save fix",
    "region": "USA",
    "game_code": "NM8E",
-   "checksum_after": "valid-6102"
+   "checksum_after": "valid-6102",
+   "in_patch_database": true
   },
   {
    "name": "mtr",
@@ -891,7 +944,8 @@
    "game": "Monster Truck Madness 64 (USA)",
    "region": "USA",
    "game_code": "NM3E",
-   "checksum_after": "valid-6102"
+   "checksum_after": "valid-6102",
+   "in_patch_database": true
   },
   {
    "name": "nascar99",
@@ -909,7 +963,8 @@
    ],
    "region": "USA",
    "game_code": "N9CE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "nba99",
@@ -927,7 +982,8 @@
    ],
    "region": "USA",
    "game_code": "NB2E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "nba99sfx",
@@ -945,7 +1001,8 @@
    ],
    "region": "USA",
    "game_code": "NB9E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "nbac2usa",
@@ -961,7 +1018,8 @@
    "description": "No save fix",
    "region": "USA",
    "game_code": "NCKE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "ncpfx",
@@ -979,7 +1037,8 @@
    ],
    "region": "USA",
    "game_code": "NNCE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "newtetr",
@@ -994,7 +1053,8 @@
    "game": "New Tetris, The (USA)",
    "region": "USA",
    "game_code": "NRIE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "quake2",
@@ -1009,7 +1069,8 @@
    "game": "Quake II (USA)",
    "region": "USA",
    "game_code": "NQ2E",
-   "checksum_after": "valid-6102"
+   "checksum_after": "valid-6102",
+   "in_patch_database": true
   },
   {
    "name": "rugrt",
@@ -1027,7 +1088,8 @@
    ],
    "region": "USA",
    "game_code": "NRGE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "scarspfx",
@@ -1045,7 +1107,8 @@
    ],
    "region": "USA",
    "game_code": "NCSE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "smbus",
@@ -1060,7 +1123,8 @@
    "game": "SMASH BROTHERS",
    "region": "USA",
    "game_code": "NALE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "snobo2us",
@@ -1075,7 +1139,8 @@
    "game": "SNOWBOARD KIDS2",
    "region": "USA",
    "game_code": "NK2E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "ssvfx",
@@ -1093,7 +1158,8 @@
    ],
    "region": "USA",
    "game_code": "NS6E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "starntsc",
@@ -1108,7 +1174,8 @@
    "game": "STAR WARS EP1 RACER",
    "region": "USA",
    "game_code": "NEPE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "swep1rus",
@@ -1127,7 +1194,8 @@
    ],
    "region": "USA",
    "game_code": "NEPE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "vchess",
@@ -1145,7 +1213,8 @@
    ],
    "region": "USA",
    "game_code": "NVCE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "vil8",
@@ -1160,7 +1229,8 @@
    "game": "VIGILANTE 8",
    "region": "USA",
    "game_code": "NV8E",
-   "checksum_after": "valid-6102"
+   "checksum_after": "valid-6102",
+   "in_patch_database": true
   },
   {
    "name": "wcwn",
@@ -1178,7 +1248,8 @@
    ],
    "region": "USA",
    "game_code": "NW3E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "wcwpfx",
@@ -1196,7 +1267,8 @@
    ],
    "region": "USA",
    "game_code": "NW2E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "wg3dvfx",
@@ -1214,7 +1286,8 @@
    ],
    "region": "USA",
    "game_code": "NW8E",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "zmm-usa",
@@ -1230,7 +1303,8 @@
    "description": "Boot and save fix",
    "region": "USA",
    "game_code": "NZSE",
-   "checksum_after": "valid-6102"
+   "checksum_after": "valid-6102",
+   "in_patch_database": true
   },
   {
    "name": "zoot-usa",
@@ -1246,7 +1320,8 @@
    "description": "Boot and save fix",
    "region": "USA",
    "game_code": "CZLE",
-   "checksum_after": "matches-no-boot-chip"
+   "checksum_after": "matches-no-boot-chip",
+   "in_patch_database": true
   },
   {
    "name": "z64patch",

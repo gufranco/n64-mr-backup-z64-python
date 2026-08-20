@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE.txt)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-820-brightgreen?style=flat-square)](tests)
+[![Tests](https://img.shields.io/badge/tests-833-brightgreen?style=flat-square)](tests)
 [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen?style=flat-square)](pyproject.toml)
 
 </div>
@@ -21,7 +21,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**11** commands · **22** modules · **820** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
+**11** commands · **22** modules · **833** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
 
 ```console
 $ z64kit doctor
@@ -130,6 +130,14 @@ documentation and an ignore rule broad enough that a payload dropped there canno
 accident. [`patches/README.md`](patches/README.md) lists every expected file with its exact size,
 SHA-256, CRC32, the game it belongs to, and the ROM checksums each patch is bound to. It is
 generated from the manifest and a test fails if the two ever disagree.
+
+Most of it is one file. `z64patch.dat` is the unit's own patch database, it already carries 75 of
+the patches known for this platform, and the unit reads it directly to find the right one. **It has
+to sit in the root of every disk**, so `build` and `organise` copy it there and say so when it is
+absent. Only 13 files beyond it are ever needed: four copy-protection cracks with their header
+sidecars, three save files, and two patches that never made it into the database. Shipping the
+database verbatim also sidesteps how the unit matches a patch to a ROM, because nothing inside it
+is renamed.
 
 ```console
 $ z64kit artifacts
@@ -282,7 +290,7 @@ patches/          # where you put the files you supply. Generated README, no pay
 
 | Suite | Command | Covers |
 |:------|:--------|:-------|
-| Everything | `pytest` | 820 tests, coverage gate at 95% |
+| Everything | `pytest` | 833 tests, coverage gate at 95% |
 | Skip the ones needing game data | `pytest -m "not artifacts"` | Explicit form of what happens anyway when no collection is present |
 | Only the ones needing game data | `pytest -m artifacts` | Byte-for-byte image reproduction. Skips unless `Z64KIT_LIBRARY` and `Z64KIT_GOLDEN` resolve |
 | Lint and format | `ruff check src tests && ruff format --check src tests` | Style and static analysis |

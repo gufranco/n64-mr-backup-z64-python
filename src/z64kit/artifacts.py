@@ -49,6 +49,7 @@ class ArtifactEntry:
     region: str | None = None
     game_code: str | None = None
     checksum_after: str | None = None
+    in_patch_database: bool = False
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,7 @@ def _entry_from_dict(item: dict) -> ArtifactEntry:
             region=item.get("region"),
             game_code=item.get("game_code"),
             checksum_after=item.get("checksum_after"),
+            in_patch_database=bool(item.get("in_patch_database", False)),
         )
     except KeyError as exc:
         raise ManifestError(f"entry is missing required field {exc.args[0]!r}") from exc
@@ -214,6 +216,8 @@ def entry_to_dict(entry: ArtifactEntry) -> dict:
         out["game_code"] = entry.game_code
     if entry.checksum_after:
         out["checksum_after"] = entry.checksum_after
+    if entry.in_patch_database:
+        out["in_patch_database"] = True
     return out
 
 
@@ -228,7 +232,8 @@ def write_manifest(entries: list[ArtifactEntry], path: Path | str, note: str) ->
     )
 
 
-FOLDER_KINDS = ("patch", "crack", "save", "header")
+FOLDER_KINDS = ("patch", "crack", "save", "header", "patch-db")
+PATCH_DATABASE = "z64patch.dat"
 FOLDER_OWN_FILES = ("README.md", ".gitignore")
 FOLDER_NAME = "patches"
 
@@ -259,8 +264,19 @@ class FolderReport:
 
 
 def folder_entries(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
-    """The files that belong in the supplied-artifact folder, in a stable order."""
-    chosen = [e for e in manifest.entries() if e.kind in FOLDER_KINDS]
+    """The files that must actually be supplied, in a stable order.
+
+    A patch the unit already finds inside `z64patch.dat` is deliberately absent
+    here. Asking for it separately would mean obtaining seventy-five files to get
+    what one file already contains, and the unit reads that one file itself.
+    """
+    chosen = [e for e in manifest.entries() if e.kind in FOLDER_KINDS and not e.in_patch_database]
+    return tuple(sorted(chosen, key=lambda e: e.filename))
+
+
+def database_contents(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
+    """What `z64patch.dat` already covers, listed so a reader can confirm it."""
+    chosen = [e for e in manifest.entries() if e.in_patch_database]
     return tuple(sorted(chosen, key=lambda e: e.filename))
 
 
@@ -284,9 +300,20 @@ def required_for(manifest: Manifest, checksums: set[tuple[str, str]]) -> set[str
             continue
         if (entry.target_crc1.upper(), entry.target_crc2.upper()) not in pairs:
             continue
-        out.add(entry.filename)
-        out.update(entry.companions)
+        # a patch the database already carries needs no separate copy, but a save
+        # that ships beside it is a real file the disk still has to hold
+        if not entry.in_patch_database:
+            out.add(entry.filename)
+        out.update(name for name in entry.companions if not _in_database(manifest, name))
+    out.add(PATCH_DATABASE)
     return out
+
+
+def _in_database(manifest: Manifest, filename: str) -> bool:
+    for entry in manifest.entries():
+        if entry.filename == filename:
+            return entry.in_patch_database
+    return False
 
 
 def inspect_folder(
@@ -303,6 +330,9 @@ def inspect_folder(
     """
     root = Path(folder)
     wanted = {e.filename: e for e in folder_entries(manifest)}
+    # a file the database already carries is still a file this project knows. Finding
+    # one loose in the folder is harmless, so it is verified rather than called unknown
+    known = {e.filename: e for e in manifest.entries()}
     needed = set(wanted) if required is None else set(required) & set(wanted)
     present: list[str] = []
     missing: list[str] = []
@@ -320,7 +350,7 @@ def inspect_folder(
         if recognised is not None and recognised.filename != path.name:
             misnamed[path.name] = recognised.filename
             continue
-        entry = wanted.get(path.name)
+        entry = wanted.get(path.name) or known.get(path.name)
         if entry is None:
             unknown.append(path.name)
             continue
@@ -402,8 +432,9 @@ def render_folder_readme(manifest: Manifest) -> str:
         "",
         "## You almost certainly do not need all of these",
         "",
-        f"The list below covers {games} games. Which files matter depends entirely on which",
-        "games you own, so ask the tool rather than reading the whole table:",
+        f"Beyond the patch database, only {len(wanted) - 1} files are ever needed, covering",
+        f"{games} games. Which of those matter depends entirely on which games you own, so",
+        "ask the tool rather than reading the whole table:",
         "",
         "```",
         "z64kit artifacts --source YOUR-GAME-FOLDER",
@@ -418,8 +449,9 @@ def render_folder_readme(manifest: Manifest) -> str:
         "| | |",
         "|:--|:--|",
         "| Region | USA releases only |",
-        f"| Games covered | {games} |",
-        f"| Files expected | {len(wanted)} |",
+        f"| Games needing a separate file | {games} |",
+        f"| Files expected here | {len(wanted)} |",
+        f"| Patches the database already covers | {len(database_contents(manifest))} |",
         "| Filenames | lowercase throughout |",
         "| Decides acceptance | SHA-256, and nothing else |",
         "",
@@ -447,7 +479,39 @@ def render_folder_readme(manifest: Manifest) -> str:
         "",
     ]
 
+    database = next((e for e in wanted if e.kind == "patch-db"), None)
+    if database is not None:
+        covered = database_contents(manifest)
+        lines += [
+            "## Start with one file",
+            "",
+            f"`{database.filename}` is the unit's own patch database, and it already covers",
+            f"{len(covered)} of the patches known for this platform. The unit reads it",
+            "directly and finds the right patch inside it, so you supply one file instead of",
+            "dozens.",
+            "",
+            "| | |",
+            "|:--|:--|",
+            f"| File | `{database.filename}` |",
+            f"| Bytes | {database.size:,} |",
+            f"| SHA-256 | `{database.sha256}` |",
+            "",
+            "**It has to be on every disk, in the root, beside the games.** The tool copies it",
+            "there for you whenever it is in this folder, and says so when it is not. Without",
+            "it a game that needs a patch loads unpatched, which usually means it cannot save",
+            "and sometimes means it will not boot at all.",
+            "",
+            "It costs about 0.6 MB of a 100 MB disk and takes nothing away from the games: a",
+            "disk holds 23 of them at 4 MB granularity and still has roughly 3 MB spare.",
+            "",
+        ]
+
     sections = [
+        (
+            "patch-db",
+            "The patch database",
+            "One file the unit reads itself. It belongs in the root of every disk.",
+        ),
         (
             "patch",
             "Save and boot fixes",
@@ -472,7 +536,10 @@ def render_folder_readme(manifest: Manifest) -> str:
         if not rows:
             continue
         lines += [f"## {title}", "", f"{blurb}", "", f"{len(rows)} files.", ""]
-        if kind == "header":
+        if kind == "patch-db":
+            lines += ["| File | Bytes |", "|:-----|------:|"]
+            lines += [f"| `{e.filename}` | {e.size:,} |" for e in rows]
+        elif kind == "header":
             lines += ["| File | Belongs to |", "|:-----|:-----------|"]
             owners = {}
             for entry in wanted:
@@ -502,6 +569,32 @@ def render_folder_readme(manifest: Manifest) -> str:
                 lines.append(
                     f"| `{entry.filename}` | {game} | {entry.size:,} | {target} | {after} |"
                 )
+        lines.append("")
+
+    covered = database_contents(manifest)
+    if covered:
+        lines += [
+            "## Already inside the patch database",
+            "",
+            f"You do not need separate copies of these {len(covered)} files. They are listed",
+            f"so you can confirm that `{PATCH_DATABASE}` covers the game you care about, and",
+            "so a copy found loose somewhere can be identified. Supplying the database is",
+            "enough.",
+            "",
+            "| File | Game | Checksum after |",
+            "|:-----|:-----|:---------------|",
+        ]
+        for entry in covered:
+            game = entry.game or ""
+            if not game:
+                owner = owning_patch(manifest, entry.filename)
+                game = (owner.game or "") if owner else ""
+            after = {
+                None: "",
+                "not-checked": "not checked",
+                "matches-no-boot-chip": "no boot chip",
+            }.get(entry.checksum_after, entry.checksum_after or "")
+            lines.append(f"| `{entry.filename}` | {game} | {after} |")
         lines.append("")
 
     lines += ["## Digests", "", "```"]
