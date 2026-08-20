@@ -171,3 +171,51 @@ class TestUpdate:
 
         assert db.available() is True
         assert db.load_default().id_patterns["NSME"].save == "eeprom512"
+
+
+class TestLookupByCodeAlone:
+    def catalogue(self):
+        return db.parse(
+            "ID:NSME cic6102|eeprom512 # SUPER MARIO 64\n"
+            "ID:NZSE cic6105|flash128k # MAJORA'S MASK\n"
+            "ID:N__E cic6102|sram32k # generic USA fallback\n"
+        )
+
+    def test_an_exact_code_resolves_without_the_rom(self):
+        assert self.catalogue().lookup_by_code("NSME").save == "eeprom512"
+
+    def test_a_wildcard_pattern_resolves_when_no_exact_match_exists(self):
+        assert self.catalogue().lookup_by_code("NQQE").save == "sram32k"
+
+    def test_the_most_specific_pattern_wins(self):
+        assert self.catalogue().lookup_by_code("NZSE").save == "flash128k"
+
+    def test_an_unknown_code_returns_nothing(self):
+        assert self.catalogue().lookup_by_code("XXXX") is None
+
+    def test_a_short_code_returns_nothing(self):
+        assert self.catalogue().lookup_by_code("NS") is None
+
+    def test_it_needs_no_rom_bytes_at_all(self):
+        found = self.catalogue().lookup_by_code("NSME")
+
+        assert found is not None
+        assert found.cic == "6102"
+
+
+class TestTheRealCatalogueCoversTheCollection:
+    def test_it_knows_a_flashram_game(self):
+        try:
+            catalogue = db.load_default()
+        except db.DatabaseMissingError:
+            pytest.skip("catalogue not cached")
+
+        assert catalogue.lookup_by_code("NZSE").save == "flash128k"
+
+    def test_it_knows_an_eeprom_game(self):
+        try:
+            catalogue = db.load_default()
+        except db.DatabaseMissingError:
+            pytest.skip("catalogue not cached")
+
+        assert catalogue.lookup_by_code("NSME").save == "eeprom512"

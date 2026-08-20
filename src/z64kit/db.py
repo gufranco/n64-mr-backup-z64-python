@@ -53,10 +53,14 @@ class Database:
     by_md5: dict[str, Entry] = field(default_factory=dict)
     id_patterns: dict[str, Entry] = field(default_factory=dict)
 
-    def lookup(self, rom: bytes, game_code: str) -> Entry | None:
-        exact = self.by_md5.get(hashlib.md5(rom).hexdigest())
-        if exact is not None:
-            return exact
+    def lookup_by_code(self, game_code: str) -> Entry | None:
+        """Resolve from the game code alone, reading no ROM bytes.
+
+        The exact-dump index needs an MD5 of the whole file, and the caller that
+        wants a save type for every game in a collection has already read each one
+        once. Charging a second full pass for a value the code pattern resolves is
+        not worth the precision.
+        """
         if len(game_code) < 4:
             return None
         best: tuple[int, Entry] | None = None
@@ -67,6 +71,12 @@ class Database:
             if best is None or weight > best[0]:
                 best = (weight, entry)
         return best[1] if best else None
+
+    def lookup(self, rom: bytes, game_code: str) -> Entry | None:
+        exact = self.by_md5.get(hashlib.md5(rom).hexdigest())
+        if exact is not None:
+            return exact
+        return self.lookup_by_code(game_code)
 
 
 def _matches(pattern: str, code: str) -> bool:

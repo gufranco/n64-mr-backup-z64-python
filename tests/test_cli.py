@@ -1238,3 +1238,90 @@ def _fake_game(rom: bytes):
         crc1=parsed.crc1,
         crc2=parsed.crc2,
     )
+
+
+class TestReportUsesRealSaveTypes:
+    def test_the_save_column_is_not_all_none(self, tmp_path, monkeypatch, capsys):
+        from tests.conftest import make_rom
+
+        from z64kit import cli, db
+
+        source = tmp_path / "roms"
+        source.mkdir()
+        (source / "mario.z64").write_bytes(make_rom(cart="SM", region="E"))
+        catalogue = db.parse("ID:NSME cic6102|eeprom512 # SUPER MARIO 64\n")
+        monkeypatch.setattr(db, "load_default", lambda: catalogue)
+
+        import argparse
+
+        args = argparse.Namespace(
+            source=str(source),
+            output=str(tmp_path / "out"),
+            inventory=None,
+            no_pdf=True,
+            patches=None,
+        )
+        assert cli.cmd_report(args) == 0
+
+        doc = (tmp_path / "out" / "catalogue.tex").read_text(encoding="utf-8")
+        assert "EEPROM 4Kb" in doc
+
+    def test_a_missing_catalogue_is_reported_and_not_fatal(self, tmp_path, monkeypatch, capsys):
+        from tests.conftest import make_rom
+
+        from z64kit import cli, db
+
+        source = tmp_path / "roms"
+        source.mkdir()
+        (source / "game.z64").write_bytes(make_rom())
+
+        def missing():
+            raise db.DatabaseMissingError("not cached")
+
+        monkeypatch.setattr(db, "load_default", missing)
+
+        import argparse
+
+        args = argparse.Namespace(
+            source=str(source),
+            output=str(tmp_path / "out"),
+            inventory=None,
+            no_pdf=True,
+            patches=None,
+        )
+        assert cli.cmd_report(args) == 0
+        assert "save type" in capsys.readouterr().out.lower()
+
+    def test_a_game_with_a_matching_patch_is_marked_as_patched(self, tmp_path, monkeypatch):
+        from tests.conftest import make_rom
+
+        from z64kit import cli, db
+
+        source = tmp_path / "roms"
+        source.mkdir()
+        rom = make_rom(cart="ZZ", crc1=0x11223344, crc2=0x55667788)
+        (source / "game.z64").write_bytes(rom)
+        supplied = tmp_path / "patches"
+        supplied.mkdir()
+        import struct
+
+        aps = bytearray(b"APS10") + bytes([1, 0]) + b" " * 50 + bytes([0]) + b"ZZE"
+        aps += struct.pack(">II", 0x11223344, 0x55667788) + bytes(5)
+        aps += struct.pack("<I", len(rom))
+        aps += struct.pack("<I", 0x40) + bytes([2]) + b"\xaa\xbb"
+        (supplied / "fix.aps").write_bytes(bytes(aps))
+        monkeypatch.setattr(db, "load_default", lambda: db.parse(""))
+
+        import argparse
+
+        args = argparse.Namespace(
+            source=str(source),
+            output=str(tmp_path / "out"),
+            inventory=None,
+            no_pdf=True,
+            patches=str(supplied),
+        )
+        assert cli.cmd_report(args) == 0
+
+        doc = (tmp_path / "out" / "catalogue.tex").read_text(encoding="utf-8")
+        assert "P" in doc

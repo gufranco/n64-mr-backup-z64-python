@@ -480,6 +480,31 @@ def cmd_inventory(args) -> int:
     return 0
 
 
+def _save_types(found) -> dict[str, str]:
+    """Which save chip each game carries, from the fetched catalogue.
+
+    The chip is a property of the board and cannot be read from the ROM, so it has
+    to come from a catalogue. Without one every game would be reported as saving
+    nothing, which is worse than saying so plainly: the printed pages would claim
+    no game needs a donor cartridge.
+    """
+    try:
+        catalogue = db.load_default()
+    except db.DatabaseMissingError:
+        print(
+            "note: no save type catalogue is cached, so the save column and the donor "
+            "advice are left blank. Run `z64kit db-update` to fetch it."
+        )
+        return {}
+
+    out: dict[str, str] = {}
+    for game in found.games:
+        entry = catalogue.lookup_by_code(game.game_code)
+        if entry is not None:
+            out[game.filename] = entry.save
+    return out
+
+
 def cmd_report(args) -> int:
     found = _scan_or_exit(args.source)
     rules = compat.load_rules()
@@ -488,8 +513,12 @@ def cmd_report(args) -> int:
 
     layout = _layout(found)
     names = _names(found)
-    patched = {g.filename for g in found.games if found.companions_for(g)}
-    rows = catalogue.rows_from(layout, names, {}, rules, patched)
+    saves = _save_types(found)
+    patches = _patch_library(getattr(args, "patches", None))
+    patched = {
+        g.filename for g in found.games if found.companions_for(g) or _patches_for(patches, g)
+    }
+    rows = catalogue.rows_from(layout, names, saves, rules, patched)
 
     source = catalogue.build(rows, rules=rules, held=held, generated=_today())
     result = render.write(source, out_dir / "catalogue", compile_pdf=not args.no_pdf)
@@ -880,6 +909,9 @@ def build_parser() -> argparse.ArgumentParser:
     rep.add_argument("output")
     rep.add_argument("--inventory", default=None)
     rep.add_argument("--no-pdf", action="store_true")
+    rep.add_argument(
+        "--patches", default=None, help="folder of patch files, so patched games are marked"
+    )
     rep.set_defaults(func=cmd_report)
 
     vic = subparsers.add_parser("vi", help="report the video configuration in each ROM, read only")
