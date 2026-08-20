@@ -13,7 +13,7 @@ from __future__ import annotations
 import collections
 from dataclasses import dataclass
 
-from ..compat import Candidate, Rules, classify
+from ..compat import Candidate, Rules, classify, requirement_for
 from ..inventory import Inventory
 from . import latex
 
@@ -47,6 +47,7 @@ class Row:
     status: str
     flags: str
     crc1: str
+    requirement: str = ""
 
 
 def flags_for(verdict, game, *, has_companion: bool) -> str:
@@ -131,6 +132,17 @@ def build(rows: list[Row], *, rules: Rules, held: Inventory, generated: str) -> 
         )
     )
 
+    affected = [r for r in rows if r.requirement]
+    if affected:
+        body.append(latex.section("What each affected game needs"))
+        body.append(
+            latex.longtable(
+                ["Game", "What it needs"],
+                [[r.title, r.requirement] for r in sorted(affected, key=lambda x: x.title)],
+                widths=["55mm", "105mm"],
+            )
+        )
+
     body.append(latex.section("Disk contents"))
     for disk in sorted({r.disk for r in rows}):
         on_disk = [r for r in rows if r.disk == disk]
@@ -204,6 +216,7 @@ def rows_from(layout, names, saves, rules: Rules, patched: set[str]) -> list[Row
                     status=verdict.status,
                     flags=flags_for(verdict, game, has_companion=game.filename in patched),
                     crc1=game.crc1,
+                    requirement=requirement_for(verdict, rules),
                 )
             )
     return out

@@ -1,3 +1,5 @@
+import dataclasses
+
 import pytest
 
 from z64kit import compat, inventory
@@ -138,3 +140,135 @@ class TestBuild:
         out = catalogue.build([], rules=rules, held=inventory.Inventory(), generated="today")
 
         assert r"\end{document}" in out
+
+
+class TestPerGameRequirements:
+    def rows_with(self, requirement, title="Blocked Game (USA)"):
+        return [
+            catalogue.Row(
+                disk="Zip Disk 01",
+                title=title,
+                name83="BLOCKED",
+                mib=16,
+                cic="6102",
+                save="EEPROM 16Kb",
+                status="needs-donor",
+                flags="!",
+                crc1="AABBCCDD",
+                requirement=requirement,
+            )
+        ]
+
+    def test_a_blocked_game_gets_its_own_section(self):
+        doc = catalogue.build(
+            self.rows_with("Needs a 16 Kbit EEPROM donor."),
+            rules=compat.load_rules(),
+            held=inventory.Inventory(),
+            generated="2026-08-20",
+        )
+
+        assert "What each affected game needs" in doc
+
+    def test_the_sentence_reaches_the_document(self):
+        doc = catalogue.build(
+            self.rows_with("Needs a 16 Kbit EEPROM donor, for example Star Wars Episode I Racer."),
+            rules=compat.load_rules(),
+            held=inventory.Inventory(),
+            generated="2026-08-20",
+        )
+
+        assert "Star Wars Episode I Racer" in doc
+
+    def test_the_game_title_appears_beside_its_requirement(self):
+        doc = catalogue.build(
+            self.rows_with("Needs a FlashRAM donor."),
+            rules=compat.load_rules(),
+            held=inventory.Inventory(),
+            generated="2026-08-20",
+        )
+
+        assert "Blocked Game (USA)" in doc
+
+    def test_a_collection_with_nothing_blocked_omits_the_section(self):
+        rows = [
+            catalogue.Row(
+                disk="Zip Disk 01",
+                title="Fine Game (USA)",
+                name83="FINE",
+                mib=8,
+                cic="6102",
+                save="EEPROM 4Kb",
+                status="native",
+                flags="",
+                crc1="11223344",
+                requirement="",
+            )
+        ]
+
+        doc = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="2026-08-20"
+        )
+
+        assert "What each affected game needs" not in doc
+
+    def test_two_games_needing_the_same_thing_are_both_listed(self):
+        rows = self.rows_with("Needs a FlashRAM donor.", title="Game A") + self.rows_with(
+            "Needs a FlashRAM donor.", title="Game B"
+        )
+
+        doc = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="2026-08-20"
+        )
+
+        assert "Game A" in doc
+        assert "Game B" in doc
+
+    def test_the_requirement_defaults_to_empty_so_existing_callers_keep_working(self):
+        row = catalogue.Row(
+            disk="d",
+            title="t",
+            name83="N",
+            mib=1,
+            cic="6102",
+            save="None",
+            status="native",
+            flags="",
+            crc1="0",
+        )
+
+        assert row.requirement == ""
+
+
+@dataclasses.dataclass(frozen=True)
+class FakeGame:
+    filename: str
+    stem: str
+    size: int = 16 * 1024 * 1024
+    cic: str = "6102"
+    crc1: str = "AABBCCDD"
+    true_extension: str = "Z64"
+    checksum_valid: bool = True
+
+
+class TestRowsFromCarriesRequirements:
+    def test_a_game_needing_a_donor_gets_a_sentence(self):
+        layout = [("Zip Disk 01", [FakeGame(filename="dk64.z64", stem="Donkey Kong 64 (USA)")])]
+
+        rows = catalogue.rows_from(
+            layout,
+            {"dk64.z64": "DK64"},
+            {"dk64.z64": "eeprom2k"},
+            compat.load_rules(),
+            set(),
+        )
+
+        assert "donor" in rows[0].requirement.lower()
+
+    def test_a_game_needing_nothing_gets_an_empty_sentence(self):
+        layout = [("Zip Disk 01", [FakeGame(filename="ok.z64", stem="Fine Game (USA)")])]
+
+        rows = catalogue.rows_from(
+            layout, {"ok.z64": "FINE"}, {"ok.z64": "eeprom512"}, compat.load_rules(), set()
+        )
+
+        assert rows[0].requirement == ""

@@ -188,3 +188,62 @@ def summarise(candidates: list[Candidate], rules: Rules) -> Summary:
         oversized=tuple(v.title for v in verdicts if v.status == STATUS_TOO_LARGE),
         will_not_boot=tuple(v.title for v in verdicts if v.will_not_boot),
     )
+
+
+def donor_also_carrying(rules: Rules, donor: str, chip: str) -> tuple[str, ...]:
+    """Cartridges that carry this save chip and the wanted boot chip at once."""
+    entry = rules.donors.get(donor, {})
+    return tuple(entry.get(f"also_carrying_{chip}", ()))
+
+
+def _join_sentences(parts: list[str]) -> str:
+    """Join clauses into sentences, each capitalised, with no doubled full stop."""
+    cleaned = [p.strip().rstrip(".").strip() for p in parts if p and p.strip()]
+    if not cleaned:
+        return ""
+    return ". ".join(p[0].upper() + p[1:] if p else p for p in cleaned) + "."
+
+
+def requirement_for(verdict: Verdict, rules: Rules) -> str:
+    """One line saying what this game still needs, in words a buyer can act on.
+
+    A flag in a table says something is wrong. Only a sentence says which
+    cartridge to buy or put in the slot, which is what the reader of a printed
+    catalogue actually has to decide.
+    """
+    if verdict.status == STATUS_TOO_LARGE:
+        parts = ["too large for the unit to load at all"]
+        if verdict.note:
+            parts.append(verdict.note)
+        return _join_sentences(parts)
+
+    parts: list[str] = []
+    if verdict.will_not_boot:
+        parts.append("will not boot without a donor cartridge")
+
+    chip = ""
+    if verdict.boot_chip_action:
+        found = [w for w in verdict.boot_chip_action.replace(",", " ").split() if w.isdigit()]
+        chip = found[0] if found else ""
+
+    if verdict.donor:
+        label = rules.donor_label(verdict.donor)
+        reference = rules.donor_reference(verdict.donor)
+        shared = donor_also_carrying(rules, verdict.donor, chip) if chip else ()
+        sentence = f"needs a {label}"
+        if shared:
+            sentence += (
+                f", and {shared[0]} carries both that and the {chip} boot chip, "
+                "so one cartridge covers both"
+            )
+        elif reference:
+            sentence += f", for example {reference}"
+        parts.append(sentence)
+        parts.append("the save is written to whichever cartridge is inserted")
+
+    if verdict.boot_chip_action and not (
+        verdict.donor and chip and donor_also_carrying(rules, verdict.donor, chip)
+    ):
+        parts.append(verdict.boot_chip_action)
+
+    return _join_sentences(parts)

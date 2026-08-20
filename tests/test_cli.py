@@ -958,3 +958,81 @@ class TestDoctorChecksTheArtifactFolder:
         for name in ("cc-usa.aps", "zoot-usa.aps", "swep1rus.eep"):
             assert name in from_doctor
             assert name in from_artifacts
+
+
+class TestInventoryAsk:
+    def test_the_ask_flag_is_registered(self):
+        from z64kit import cli
+
+        args = cli.build_parser().parse_args(["inventory", "src", "--ask"])
+
+        assert args.ask is True
+
+    def test_it_defaults_to_off_so_scripts_keep_working(self):
+        from z64kit import cli
+
+        args = cli.build_parser().parse_args(["inventory", "src"])
+
+        assert args.ask is False
+
+    def test_ticking_a_cartridge_records_it(self, tmp_path, monkeypatch):
+        from z64kit import cli, compat, inventory
+
+        answers = iter(["1", ""])
+        monkeypatch.setattr(cli.ConsoleIO, "ask", lambda self, prompt: next(answers))
+        monkeypatch.setattr(cli.ConsoleIO, "say", lambda self, text="": None)
+
+        rules = compat.load_rules()
+        games = [
+            compat.Candidate(key="dk64.z64", title="Donkey Kong 64 (USA)", save="eeprom2k"),
+            compat.Candidate(key="cc.z64", title="Command & Conquer (USA)", save="flash128k"),
+        ]
+        questions = inventory.questions(games, rules)
+        target = tmp_path / "inv.json"
+
+        result = cli._ask_inventory(questions, inventory.Inventory(), target)
+
+        assert result.is_recorded is True
+        assert len(result.owned) == 1
+        assert target.exists()
+
+    def test_ticking_nothing_still_records_an_answer(self, tmp_path, monkeypatch):
+        from z64kit import cli, compat, inventory
+
+        monkeypatch.setattr(cli.ConsoleIO, "ask", lambda self, prompt: "")
+        monkeypatch.setattr(cli.ConsoleIO, "say", lambda self, text="": None)
+
+        rules = compat.load_rules()
+        games = [compat.Candidate(key="dk64.z64", title="Donkey Kong 64", save="eeprom2k")]
+        questions = inventory.questions(games, rules)
+
+        result = cli._ask_inventory(questions, inventory.Inventory(), tmp_path / "inv.json")
+
+        assert result.is_recorded is True
+        assert result.owned == frozenset()
+
+    def test_a_collection_needing_nothing_says_so(self, tmp_path, monkeypatch, capsys):
+        from z64kit import cli, inventory
+
+        said = []
+        monkeypatch.setattr(cli.ConsoleIO, "say", lambda self, text="": said.append(text))
+
+        result = cli._ask_inventory((), inventory.Inventory(), tmp_path / "inv.json")
+
+        assert result.is_recorded is False
+        assert any("Nothing" in line for line in said)
+
+    def test_previously_owned_cartridges_start_ticked(self, tmp_path, monkeypatch):
+        from z64kit import cli, compat, inventory
+
+        monkeypatch.setattr(cli.ConsoleIO, "ask", lambda self, prompt: "")
+        monkeypatch.setattr(cli.ConsoleIO, "say", lambda self, text="": None)
+
+        rules = compat.load_rules()
+        games = [compat.Candidate(key="dk64.z64", title="Donkey Kong 64", save="eeprom2k")]
+        questions = inventory.questions(games, rules)
+        already = inventory.Inventory(owned=frozenset({questions[0].key}), recorded=True)
+
+        result = cli._ask_inventory(questions, already, tmp_path / "inv.json")
+
+        assert result.owned == already.owned

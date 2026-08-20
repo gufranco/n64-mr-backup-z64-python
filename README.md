@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE.txt)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-598-brightgreen?style=flat-square)](tests)
+[![Tests](https://img.shields.io/badge/tests-677-brightgreen?style=flat-square)](tests)
 [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen?style=flat-square)](pyproject.toml)
 
 </div>
@@ -20,7 +20,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**11** commands · **22** modules · **598** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
+**11** commands · **22** modules · **677** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
 
 ```console
 $ z64kit doctor
@@ -227,7 +227,7 @@ z64kit merge game.z64 game.aps --no-aa --output merged.aps --apply
 | `plan` | Show which games land on which disk, and whether that is the minimum |
 | `organise` | Write one folder per disk with 8.3 names, no images |
 | `build` | Write the disk images, verifying every file on the way out |
-| `inventory` | Record which cartridges you have, and what the gaps cost |
+| `inventory` | Tick off which cartridges you own, and see what the gaps cost |
 | `report` | Write the printable catalogue |
 | `vi` | Report the video configuration in each ROM, read only |
 | `merge` | Fold a video change into a patch the game already needs |
@@ -267,7 +267,7 @@ patches/          # where you put the files you supply. Generated README, no pay
 
 | Suite | Command | Covers |
 |:------|:--------|:-------|
-| Everything | `pytest` | 598 tests, coverage gate at 95% |
+| Everything | `pytest` | 677 tests, coverage gate at 95% |
 | Skip the ones needing game data | `pytest -m "not artifacts"` | Explicit form of what happens anyway when no collection is present |
 | Only the ones needing game data | `pytest -m artifacts` | Byte-for-byte image reproduction. Skips unless `Z64KIT_LIBRARY` and `Z64KIT_GOLDEN` resolve |
 | Lint and format | `ruff check src tests && ruff format --check src tests` | Style and static analysis |

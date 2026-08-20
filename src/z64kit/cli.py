@@ -25,7 +25,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import aps, artifacts, compat, db, inventory, merge, naming, packing, scan, vi
+from . import aps, artifacts, compat, db, inventory, merge, naming, packing, prompts, scan, vi
 from .fat import image, writer
 from .report import catalogue, latex, render
 
@@ -308,6 +308,48 @@ def cmd_organise(args) -> int:
     return 0
 
 
+class ConsoleIO:
+    """The real terminal. Every prompt goes through this so the flow stays testable."""
+
+    def say(self, text: str = "") -> None:
+        print(text)
+
+    def ask(self, prompt: str) -> str:
+        return input(prompt)
+
+
+def _ask_inventory(questions, held, path):
+    """Tick off the cartridges owned, then record the answers.
+
+    Reading a list of things you might own and then re-running the command with
+    the right flags is a programmer's workflow. This asks instead.
+    """
+    console = ConsoleIO()
+    if not questions:
+        console.say("Nothing in this collection needs a donor cartridge.")
+        return held
+
+    console.say()
+    console.say("Some games cannot save on the unit alone. They write to whichever")
+    console.say("cartridge is in the slot, so the cartridge has to carry the right chip.")
+
+    labels = []
+    for question in questions:
+        example = f" (for example {question.examples[0]})" if question.examples else ""
+        labels.append(f"{question.label}{example} - unlocks {question.unlocks} games")
+
+    already = {i for i, q in enumerate(questions) if held.owns(q.key)}
+    picked = prompts.toggle_list(
+        console, "Tick the cartridges you already own:", labels, selected=already
+    )
+
+    chosen = inventory.Inventory(owned=frozenset(questions[i].key for i in picked), recorded=True)
+    inventory.save(chosen, path)
+    console.say()
+    console.say(f"Recorded in {path}. Re-run this command to change the answers.")
+    return chosen
+
+
 def cmd_inventory(args) -> int:
     found = _scan_or_exit(args.source)
     rules = compat.load_rules()
@@ -319,6 +361,8 @@ def cmd_inventory(args) -> int:
         held = inventory.Inventory(owned=frozenset(args.own), recorded=True)
         inventory.save(held, path)
         print(f"recorded {', '.join(sorted(held.owned))} in {path}")
+    elif args.ask:
+        held = _ask_inventory(inventory.questions(games, rules), held, path)
 
     for question in inventory.questions(games, rules):
         mark = "yes" if held.owns(question.key) else "not recorded"
@@ -712,6 +756,9 @@ def build_parser() -> argparse.ArgumentParser:
     inv.add_argument("--file", default="z64kit-inventory.json")
     inv.add_argument("--own", action="append", default=[])
     inv.add_argument("--show", action="store_true")
+    inv.add_argument(
+        "--ask", action="store_true", help="tick off what you own instead of passing --own"
+    )
     inv.set_defaults(func=cmd_inventory)
 
     rep = subparsers.add_parser("report", help="write the printable catalogue")
