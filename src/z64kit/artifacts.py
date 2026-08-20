@@ -520,7 +520,9 @@ def render_folder_readme(manifest: Manifest) -> str:
         (
             "crack",
             "Copy protection removal",
-            "These games check for a real cartridge and refuse to run from a disk.",
+            "These games check for a real cartridge and refuse to run from a disk. Each one "
+            "is a single small file, and each is easier to find on its own than as part of "
+            "any collection it was once bundled into. Look for the filename.",
         ),
         ("save", "Save data", "Shipped alongside a patch, and meaningless without it."),
         (
@@ -659,9 +661,16 @@ def render_folder_readme(manifest: Manifest) -> str:
     lines += [f"| `{e.filename}` | {e.provenance} |" for e in wanted]
     lines += [
         "",
-        "A recorded source says where the digest came from. It is not a claim that the file",
-        "is correct, safe, or what it says it is. Every one of these was verified against",
-        "the ROM it targets before being trusted, and so should any replacement.",
+        "Provenance is here to say how much to trust a file, not where to go and get it.",
+        "A file from a release with no named author and no licence deserves more suspicion",
+        "than one from a versioned collection, and neither is a claim that the file is",
+        "correct. Every one of these was checked against the ROM it targets before being",
+        "trusted, and so should any replacement.",
+        "",
+        "Look for each file by its own name. Asking for whatever archive it once shipped",
+        "inside is worse advice: the archives were renamed and repacked constantly, and the",
+        "file you actually need is the same file whatever wrapper it arrives in. The digest",
+        "above is what settles it.",
         "",
     ]
     return "\n".join(lines)

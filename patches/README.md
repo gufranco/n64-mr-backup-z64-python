@@ -98,7 +98,7 @@ Without one of these the game either cannot write a save or will not start.
 
 ## Copy protection removal
 
-These games check for a real cartridge and refuse to run from a disk.
+These games check for a real cartridge and refuse to run from a disk. Each one is a single small file, and each is easier to find on its own than as part of any collection it was once bundled into. Look for the filename.
 
 4 files.
 
@@ -298,20 +298,27 @@ a game run on the unit, not for the games.
 | File | Recorded source |
 |:-----|:----------------|
 | `1080_j.hdr` | ships beside its patch |
-| `1080_j.zps` | CRACK.ZIP |
+| `1080_j.zps` | scene crack release, no author or licence stated |
 | `banjo.hdr` | ships beside its patch |
-| `banjo.zps` | CRACK.ZIP |
+| `banjo.zps` | scene crack release, no author or licence stated |
 | `dk64-usa.ram` | Unofficial Z64 Patch File v3.0U |
 | `dx-btusc.aps` | Standalone dextrose release dx-btusc |
 | `jfg-usa.ram` | Unofficial Z64 Patch File v3.0U |
 | `kgsgood.aps` | Unofficial Z64 Patch File v3.0U, extra folder |
 | `nba_cs.hdr` | ships beside its patch |
-| `nba_cs.zps` | CRACK.ZIP |
+| `nba_cs.zps` | scene crack release, no author or licence stated |
 | `swep1rus.eep` | Unofficial Z64 Patch File v3.0U |
 | `yoshi_e.hdr` | ships beside its patch |
-| `yoshi_e.zps` | CRACK.ZIP |
-| `z64patch.dat` | fab at elitendo.com |
+| `yoshi_e.zps` | scene crack release, no author or licence stated |
+| `z64patch.dat` | community patch database, compiled release |
 
-A recorded source says where the digest came from. It is not a claim that the file
-is correct, safe, or what it says it is. Every one of these was verified against
-the ROM it targets before being trusted, and so should any replacement.
+Provenance is here to say how much to trust a file, not where to go and get it.
+A file from a release with no named author and no licence deserves more suspicion
+than one from a versioned collection, and neither is a claim that the file is
+correct. Every one of these was checked against the ROM it targets before being
+trusted, and so should any replacement.
+
+Look for each file by its own name. Asking for whatever archive it once shipped
+inside is worse advice: the archives were renamed and repacked constantly, and the
+file you actually need is the same file whatever wrapper it arrives in. The digest
+above is what settles it.

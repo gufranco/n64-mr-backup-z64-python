@@ -529,3 +529,51 @@ class TestVerifiedCountRespectsTheFilter:
         report = artifacts.inspect_folder(tmp_path, manifest)
 
         assert len(report.needed) == len(artifacts.folder_entries(manifest))
+
+
+class TestProvenanceNamesNoContainerToHunt:
+    """Provenance says how much to trust a file, never where to go and get it.
+
+    Naming an archive sends the reader looking for the archive instead of the file,
+    which is both worse advice and closer to a distribution pointer than this
+    project should print.
+    """
+
+    def test_no_archive_is_named_among_the_files_to_obtain(self):
+        """The firmware's own name is fine. An archive to go hunting for is not."""
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest())
+        asked_for = text.split("## What does not belong here")[0].lower()
+
+        for suffix in (".zip", ".rar", ".7z"):
+            assert suffix not in asked_for
+
+    def test_no_bare_domain_appears_anywhere(self):
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest()).lower()
+
+        for domain in (".com", ".net", ".org/", ".to/", ".io/"):
+            assert domain not in text
+
+    def test_the_patch_database_is_still_named_because_it_is_a_needed_file(self):
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest())
+
+        assert artifacts.PATCH_DATABASE in text
+
+    def test_every_crack_asks_for_the_file_itself(self):
+        manifest = artifacts.load_default_manifest()
+        names = {e.filename for e in artifacts.folder_entries(manifest)}
+
+        for name in ("1080_j.zps", "banjo.zps", "nba_cs.zps", "yoshi_e.zps"):
+            assert name in names
+
+    def test_no_provenance_names_an_archive(self):
+        manifest = artifacts.load_default_manifest()
+
+        for entry in manifest.entries():
+            lowered = entry.provenance.lower()
+            assert ".zip" not in lowered, entry.filename
+            assert ".com" not in lowered, entry.filename
+
+    def test_the_provenance_section_says_what_it_is_for(self):
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest())
+
+        assert "how much to trust" in text.lower()
