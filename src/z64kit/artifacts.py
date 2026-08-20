@@ -214,3 +214,226 @@ def write_manifest(entries: list[ArtifactEntry], path: Path | str, note: str) ->
     Path(path).write_text(
         json.dumps(payload, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
     )
+
+
+FOLDER_KINDS = ("patch", "save")
+FOLDER_OWN_FILES = ("README.md", ".gitignore")
+FOLDER_NAME = "patches"
+
+
+@dataclass(frozen=True)
+class FolderReport:
+    present: tuple[str, ...] = ()
+    missing: tuple[str, ...] = ()
+    wrong: dict[str, str] = field(default_factory=dict)
+    misnamed: dict[str, str] = field(default_factory=dict)
+    unknown: tuple[str, ...] = ()
+
+    @property
+    def complete(self) -> bool:
+        return not self.missing and not self.wrong
+
+
+def folder_entries(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
+    """The files that belong in the supplied-artifact folder, in a stable order."""
+    chosen = [e for e in manifest.entries() if e.kind in FOLDER_KINDS]
+    return tuple(sorted(chosen, key=lambda e: e.filename))
+
+
+def other_entries(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
+    chosen = [e for e in manifest.entries() if e.kind not in FOLDER_KINDS]
+    return tuple(sorted(chosen, key=lambda e: e.filename))
+
+
+def inspect_folder(folder: Path | str, manifest: Manifest) -> FolderReport:
+    """Compare a folder against the manifest, deciding on SHA-256 alone.
+
+    A missing folder is reported as everything missing rather than raised, because
+    the answer a caller wants is the same either way: none of it is here yet.
+    """
+    root = Path(folder)
+    wanted = {e.filename: e for e in folder_entries(manifest)}
+    present: list[str] = []
+    missing: list[str] = []
+    wrong: dict[str, str] = {}
+    misnamed: dict[str, str] = {}
+    unknown: list[str] = []
+
+    on_disk = sorted(p for p in root.iterdir() if p.is_file()) if root.is_dir() else []
+
+    for path in on_disk:
+        if path.name in FOLDER_OWN_FILES:
+            continue
+        data = path.read_bytes()
+        recognised = identify(data, manifest)
+        if recognised is not None and recognised.filename != path.name:
+            misnamed[path.name] = recognised.filename
+            continue
+        entry = wanted.get(path.name)
+        if entry is None:
+            unknown.append(path.name)
+            continue
+        result = verify(data, entry)
+        if result.ok:
+            present.append(path.name)
+        else:
+            wrong[path.name] = result.reason
+
+    for name in wanted:
+        if name not in present and name not in wrong:
+            missing.append(name)
+
+    return FolderReport(
+        present=tuple(sorted(present)),
+        missing=tuple(sorted(missing)),
+        wrong=wrong,
+        misnamed=misnamed,
+        unknown=tuple(sorted(unknown)),
+    )
+
+
+def _folder_row(entry: ArtifactEntry) -> str:
+    target = ""
+    if entry.target_crc1 and entry.target_crc2:
+        target = f"`{entry.target_crc1}` / `{entry.target_crc2}`"
+    return (
+        f"| `{entry.filename}` | {entry.game or ''} | {entry.description or ''} "
+        f"| {entry.size:,} | {target} |"
+    )
+
+
+def render_folder_readme(manifest: Manifest) -> str:
+    """Write the folder's documentation from the manifest, so the two cannot diverge.
+
+    Nothing here says where to obtain a file. The point of the document is to let
+    somebody confirm that what they already have is the right thing, and to name
+    exactly what is wrong when it is not.
+    """
+    wanted = folder_entries(manifest)
+    others = other_entries(manifest)
+
+    lines = [
+        "# Supplied artifacts",
+        "",
+        "Files this project needs, cannot distribute, and cannot regenerate. Put them",
+        "in this folder. Everything here is ignored by git except this document and the",
+        "ignore rules beside it, so a payload dropped in cannot be committed by accident.",
+        "",
+        "This file is generated from the manifest the code checks against. Do not edit it",
+        "by hand: run `z64kit artifacts --write-readme` after the manifest changes.",
+        "",
+        "## How a file is accepted",
+        "",
+        "**SHA-256 alone decides.** Size is a cheap pre-filter and CRC32 is there so a",
+        "file can be cross-referenced against a public database. Neither one accepts or",
+        "rejects anything.",
+        "",
+        "A file whose digest does not match is reported with the reason, not just a",
+        "failure. Wrong size, right size with altered content, and a recognised file",
+        "under the wrong name are three different problems with three different fixes.",
+        "",
+        "```",
+        "z64kit artifacts            # what is here, what is missing, what is wrong",
+        "```",
+        "",
+        "## Expected files",
+        "",
+        f"{len(wanted)} files. The checksum pair is the ROM each patch is bound to, which",
+        "is how a patch built for another revision is refused rather than applied.",
+        "",
+        "| File | Game | Purpose | Bytes | Target CRC1 / CRC2 |",
+        "|:-----|:-----|:--------|------:|:-------------------|",
+    ]
+    lines += [_folder_row(entry) for entry in wanted]
+    lines += [
+        "",
+        "### Digests",
+        "",
+        "```",
+    ]
+    for entry in wanted:
+        lines.append(f"{entry.sha256}  {entry.filename}")
+    lines += [
+        "```",
+        "",
+        "### CRC32, for looking a file up elsewhere",
+        "",
+        "| File | CRC32 |",
+        "|:-----|:------|",
+    ]
+    lines += [f"| `{e.filename}` | `{e.crc32}` |" for e in wanted]
+
+    companions = [e for e in wanted if e.companions]
+    if companions:
+        lines += [
+            "",
+            "## Files that travel in pairs",
+            "",
+            "Some patches need a save file present as well, and the unit expects both to",
+            "carry the ROM's name once they reach a disk. The tool renames them together,",
+            "so here they keep the names below.",
+            "",
+            "| Patch | Also needs |",
+            "|:------|:-----------|",
+        ]
+        lines += [
+            f"| `{e.filename}` | {', '.join(f'`{c}`' for c in e.companions)} |" for e in companions
+        ]
+
+    lines += [
+        "",
+        "## Checking a file yourself",
+        "",
+        "macOS and any system with Perl:",
+        "",
+        "```bash",
+        "shasum -a 256 *.aps *.ram *.eep",
+        "```",
+        "",
+        "Linux:",
+        "",
+        "```bash",
+        "sha256sum *.aps *.ram *.eep",
+        "```",
+        "",
+        "Windows PowerShell:",
+        "",
+        "```powershell",
+        "Get-FileHash -Algorithm SHA256 *.aps, *.ram, *.eep",
+        "```",
+        "",
+        "Compare the result against the digest list above. A digest that appears in the",
+        "list under a different filename means the file is right and the name is wrong,",
+        "which is the one failure that needs no new file to fix.",
+        "",
+        "## What does not belong here",
+        "",
+    ]
+    if others:
+        lines += [
+            "These are named in the manifest so the tool can recognise them, and they are",
+            "not part of building a disk. Keep them wherever you keep unit firmware.",
+            "",
+            "| File | Purpose |",
+            "|:-----|:--------|",
+        ]
+        lines += [f"| `{e.filename}` | {e.description or e.kind} |" for e in others]
+        lines.append("")
+    lines += [
+        "Game images never belong here either. This folder is for the small files that",
+        "make a game run on the unit, not for the games.",
+        "",
+        "## Provenance",
+        "",
+        "| File | Recorded source |",
+        "|:-----|:----------------|",
+    ]
+    lines += [f"| `{e.filename}` | {e.provenance} |" for e in wanted]
+    lines += [
+        "",
+        "A recorded source says where the digest came from. It is not a claim that the",
+        "file is correct, safe, or what it says it is. Every one of these was verified",
+        "against the ROM it targets before being trusted, and so should any replacement.",
+        "",
+    ]
+    return "\n".join(lines)

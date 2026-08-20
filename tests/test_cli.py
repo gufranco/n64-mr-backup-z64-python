@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from tests.conftest import make_rom
@@ -270,8 +271,15 @@ class TestPatchLibrary:
     def test_no_folder_yields_no_patches(self):
         assert cli._patch_library(None) == {}
 
-    def test_a_missing_folder_yields_no_patches(self, tmp_path):
-        assert cli._patch_library(str(tmp_path / "nope")) == {}
+    def test_a_missing_folder_is_an_error_not_an_empty_library(self, tmp_path):
+        with pytest.raises(cli.PatchFolderMissingError, match="does not exist"):
+            cli._patch_library(str(tmp_path / "nope"))
+
+    def test_no_folder_at_all_yields_no_patches(self):
+        assert cli._patch_library(None) == {}
+
+    def test_an_empty_folder_yields_no_patches(self, tmp_path):
+        assert cli._patch_library(str(tmp_path)) == {}
 
     def test_indexes_a_patch_by_its_target_header(self, tmp_path):
         lib_dir = tmp_path / "patches"
@@ -695,3 +703,138 @@ class TestMergeCommandSuccess:
 
         assert cli.main(["merge", str(rom_path), str(patch_path)]) == 2
         assert "nothing requested" in capsys.readouterr().out
+
+
+class TestArtifactsCommand:
+    def test_the_command_is_registered(self):
+        from z64kit import cli
+
+        assert cli.build_parser().parse_args(["artifacts"]).func is not None
+
+    def test_reports_missing_files_against_an_empty_folder(self, tmp_path, capsys):
+        from z64kit import cli
+
+        code = cli.main(["artifacts", "--folder", str(tmp_path)])
+        printed = capsys.readouterr().out
+
+        assert code == 1
+        assert "missing" in printed.lower()
+        assert "cc-usa.aps" in printed
+
+    def test_names_the_folder_it_looked_in(self, tmp_path, capsys):
+        from z64kit import cli
+
+        cli.main(["artifacts", "--folder", str(tmp_path)])
+
+        assert str(tmp_path) in capsys.readouterr().out
+
+    def test_flags_a_file_that_does_not_match_its_digest(self, tmp_path, capsys):
+        from z64kit import cli
+
+        (tmp_path / "cc-usa.aps").write_bytes(b"\x00" * 92484)
+
+        cli.main(["artifacts", "--folder", str(tmp_path)])
+
+        assert "cc-usa.aps" in capsys.readouterr().out
+
+    def test_regenerates_the_document_from_the_manifest(self, tmp_path, capsys):
+        from z64kit import artifacts, cli
+
+        target = tmp_path / "README.md"
+
+        code = cli.main(["artifacts", "--folder", str(tmp_path), "--write-readme"])
+
+        assert code == 0
+        expected = artifacts.render_folder_readme(artifacts.load_default_manifest())
+        assert target.read_text(encoding="utf-8") == expected
+        assert str(target) in capsys.readouterr().out
+
+    def test_emits_machine_readable_output_on_request(self, tmp_path, capsys):
+        import json
+
+        from z64kit import cli
+
+        cli.main(["artifacts", "--folder", str(tmp_path), "--json"])
+
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["complete"] is False
+        assert "cc-usa.aps" in payload["missing"]
+
+
+class TestPatchFolderIsNotSilentlySkipped:
+    def test_an_explicit_folder_that_does_not_exist_is_an_error(self, tmp_path, capsys):
+        from z64kit import cli
+
+        source = tmp_path / "roms"
+        source.mkdir()
+
+        code = cli.main(
+            [
+                "organise",
+                str(source),
+                str(tmp_path / "out"),
+                "--patches",
+                str(tmp_path / "nope"),
+            ]
+        )
+
+        assert code == 2
+        assert "nope" in capsys.readouterr().out
+
+
+class TestArtifactsCommandReporting:
+    def test_reports_a_recognised_file_under_the_wrong_name(self, tmp_path, capsys):
+        from z64kit import artifacts, cli
+
+        entry = artifacts.folder_entries(artifacts.load_default_manifest())[0]
+        source = Path("patches") / entry.filename
+        if not source.exists():
+            pytest.skip("the real payload is not present on this machine")
+        (tmp_path / "wrongname.aps").write_bytes(source.read_bytes())
+
+        cli.main(["artifacts", "--folder", str(tmp_path)])
+        printed = capsys.readouterr().out
+
+        assert "wrong name" in printed
+        assert entry.filename in printed
+
+    def test_reports_a_file_the_manifest_does_not_know(self, tmp_path, capsys):
+        from z64kit import cli
+
+        (tmp_path / "stray.txt").write_bytes(b"hello")
+
+        cli.main(["artifacts", "--folder", str(tmp_path)])
+
+        assert "not in the manifest" in capsys.readouterr().out
+
+    def test_reports_success_when_every_file_verifies(self, tmp_path, capsys):
+        from z64kit import artifacts, cli
+
+        manifest = artifacts.load_default_manifest()
+        for entry in artifacts.folder_entries(manifest):
+            source = Path("patches") / entry.filename
+            if not source.exists():
+                pytest.skip("the real payloads are not present on this machine")
+            (tmp_path / entry.filename).write_bytes(source.read_bytes())
+
+        code = cli.main(["artifacts", "--folder", str(tmp_path)])
+
+        assert code == 0
+        assert "present and verified" in capsys.readouterr().out
+
+    def test_json_output_reports_completeness(self, tmp_path, capsys):
+        import json as jsonlib
+
+        from z64kit import artifacts, cli
+
+        manifest = artifacts.load_default_manifest()
+        for entry in artifacts.folder_entries(manifest):
+            source = Path("patches") / entry.filename
+            if not source.exists():
+                pytest.skip("the real payloads are not present on this machine")
+            (tmp_path / entry.filename).write_bytes(source.read_bytes())
+
+        code = cli.main(["artifacts", "--folder", str(tmp_path), "--json"])
+
+        assert code == 0
+        assert jsonlib.loads(capsys.readouterr().out)["complete"] is True

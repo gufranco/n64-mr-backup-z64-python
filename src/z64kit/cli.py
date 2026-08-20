@@ -67,6 +67,10 @@ def _candidates(found: scan.Collection) -> list[compat.Candidate]:
     ]
 
 
+class PatchFolderMissingError(FileNotFoundError):
+    """Raised when a named patch folder is absent, rather than yielding no patches."""
+
+
 def _patch_library(folder: str | None) -> dict[bytes, list[tuple[str, str, bytes]]]:
     """Index a patch folder by the 64 byte header of the ROM each patch targets.
 
@@ -78,7 +82,11 @@ def _patch_library(folder: str | None) -> dict[bytes, list[tuple[str, str, bytes
         return {}
     root = Path(folder)
     if not root.is_dir():
-        return {}
+        raise PatchFolderMissingError(
+            f"the patch folder {folder} does not exist. A missing folder is not the "
+            "same as an empty one: continuing would build disks silently missing "
+            "every patch, so this stops instead."
+        )
 
     payloads: dict[str, tuple[str, bytes]] = {}
     headers: dict[str, bytes] = {}
@@ -497,6 +505,70 @@ def cmd_doctor(_args) -> int:
     return 0
 
 
+def cmd_artifacts(args) -> int:
+    """Report what the supplied-artifact folder holds, or rewrite its documentation."""
+    manifest = artifacts.load_default_manifest()
+    folder = Path(args.folder or artifacts.FOLDER_NAME)
+
+    if args.write_readme:
+        target = folder / "README.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(artifacts.render_folder_readme(manifest), encoding="utf-8")
+        print(f"wrote {target}")
+        return 0
+
+    report = artifacts.inspect_folder(folder, manifest)
+    wanted = artifacts.folder_entries(manifest)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "folder": str(folder),
+                    "expected": len(wanted),
+                    "complete": report.complete,
+                    "present": list(report.present),
+                    "missing": list(report.missing),
+                    "wrong": report.wrong,
+                    "misnamed": report.misnamed,
+                    "unknown": list(report.unknown),
+                },
+                indent=2,
+            )
+        )
+        return 0 if report.complete else 1
+
+    print(f"folder   {folder}")
+    print(f"expected {len(wanted)} files, {len(report.present)} verified")
+
+    if report.missing:
+        print(f"\nmissing ({len(report.missing)})")
+        for name in report.missing:
+            entry = next(e for e in wanted if e.filename == name)
+            print(f"  {name:16} {entry.size:>8} bytes  {entry.game or entry.description or ''}")
+
+    if report.wrong:
+        print(f"\nwrong ({len(report.wrong)})")
+        for name, reason in sorted(report.wrong.items()):
+            print(f"  {name:16} {reason}")
+
+    if report.misnamed:
+        print(f"\nrecognised under the wrong name ({len(report.misnamed)})")
+        for found, should_be in sorted(report.misnamed.items()):
+            print(f"  {found:16} rename to {should_be}")
+
+    if report.unknown:
+        print(f"\nnot in the manifest ({len(report.unknown)})")
+        for name in report.unknown:
+            print(f"  {name}")
+
+    if report.complete:
+        print("\neverything the manifest names is present and verified.")
+        return 0
+    print(f"\nsee {folder / 'README.md'} for the digest of every expected file.")
+    return 1
+
+
 def cmd_db_update(_args) -> int:
     """Fetch the save-type catalogue. This is the only command that uses the network."""
     try:
@@ -631,6 +703,18 @@ def build_parser() -> argparse.ArgumentParser:
     mg.add_argument("--apply", action="store_true", help="actually write, otherwise dry run")
     mg.set_defaults(func=cmd_merge)
 
+    art = subparsers.add_parser(
+        "artifacts", help="check the supplied-artifact folder against the manifest"
+    )
+    art.add_argument(
+        "--folder", default=None, help=f"where the files live, default {artifacts.FOLDER_NAME}/"
+    )
+    art.add_argument("--json", action="store_true")
+    art.add_argument(
+        "--write-readme", action="store_true", help="regenerate the folder's documentation"
+    )
+    art.set_defaults(func=cmd_artifacts)
+
     dbu = subparsers.add_parser(
         "db-update", help="download the save-type catalogue, the only networked command"
     )
@@ -650,6 +734,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         return args.func(args)
+    except PatchFolderMissingError as error:
+        print(error)
+        return 2
     except SystemExit as exc:
         return int(exc.code or 0)
 

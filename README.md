@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE.txt)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-543-brightgreen?style=flat-square)](tests)
+[![Tests](https://img.shields.io/badge/tests-586-brightgreen?style=flat-square)](tests)
 [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen?style=flat-square)](pyproject.toml)
 
 </div>
@@ -20,7 +20,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**10** commands · **22** modules · **543** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
+**11** commands · **22** modules · **586** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
 
 ```console
 $ z64kit doctor
@@ -124,6 +124,27 @@ That manifest is used to recognise what you have, verify it, and diagnose a mism
 can act on. A wrong file produces "this is the headered variant, strip the first 512 bytes", not
 "hash mismatch".
 
+The files you supply go in [`patches/`](patches). That folder holds nothing but its own
+documentation and an ignore rule broad enough that a payload dropped there cannot be committed by
+accident. [`patches/README.md`](patches/README.md) lists every expected file with its exact size,
+SHA-256, CRC32, the game it belongs to, and the ROM checksums each patch is bound to. It is
+generated from the manifest and a test fails if the two ever disagree.
+
+```console
+$ z64kit artifacts
+folder   patches
+expected 15 files, 14 verified
+
+missing (1)
+  dx-btusc.aps       121964 bytes  Banjo-Tooie (USA)
+
+see patches/README.md for the digest of every expected file.
+```
+
+A file that is present but wrong is reported by reason rather than as a bare failure: wrong size,
+right size with altered content, and a correct file under the wrong name are three problems with
+three different fixes, and only the first two need a new file.
+
 > [!IMPORTANT]
 > Nothing here helps you obtain a ROM, a BIOS, or a patch. The project identifies files and refuses
 > to proceed on the wrong ones. Sourcing them is your problem, and staying legal about it is your
@@ -210,6 +231,7 @@ z64kit merge game.z64 game.aps --no-aa --output merged.aps --apply
 | `report` | Write the printable catalogue |
 | `vi` | Report the video configuration in each ROM, read only |
 | `merge` | Fold a video change into a patch the game already needs |
+| `artifacts` | Check the supplied-artifact folder against the manifest |
 | `db-update` | Download the save-type catalogue. The only command that uses the network |
 | `doctor` | Report what is installed, what is missing, and what each gap costs |
 
@@ -236,6 +258,7 @@ src/z64kit/
   report/         # LaTeX catalogue and rendering
   rom/            # header parsing and per-CIC checksum
   data/           # manifests. No payloads
+patches/          # where you put the files you supply. Generated README, no payloads
 ```
 
 ## For contributors
@@ -244,7 +267,7 @@ src/z64kit/
 
 | Suite | Command | Covers |
 |:------|:--------|:-------|
-| Everything | `pytest` | 543 tests, coverage gate at 95% |
+| Everything | `pytest` | 586 tests, coverage gate at 95% |
 | Skip the ones needing game data | `pytest -m "not artifacts"` | Explicit form of what happens anyway when no collection is present |
 | Only the ones needing game data | `pytest -m artifacts` | Byte-for-byte image reproduction. Skips unless `Z64KIT_LIBRARY` and `Z64KIT_GOLDEN` resolve |
 | Lint and format | `ruff check src tests && ruff format --check src tests` | Style and static analysis |

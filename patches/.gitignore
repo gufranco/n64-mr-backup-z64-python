@@ -1,0 +1,5 @@
+# Everything in this folder is a user supplied artifact and must never be
+# committed. Only this folder's own documentation is tracked.
+*
+!.gitignore
+!README.md
