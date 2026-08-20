@@ -7,12 +7,13 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE.txt)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-745-brightgreen?style=flat-square)](tests)
+[![Tests](https://img.shields.io/badge/tests-766-brightgreen?style=flat-square)](tests)
 [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen?style=flat-square)](pyproject.toml)
 
 </div>
 
 <p align="center">
+  <a href="GUIDE.md"><strong>Step-by-step guide</strong></a> &nbsp;|&nbsp;
   <a href="#quick-start">Quick start</a> &nbsp;|&nbsp;
   <a href="#what-it-does">What it does</a> &nbsp;|&nbsp;
   <a href="#the-video-patch-problem">Video patches</a> &nbsp;|&nbsp;
@@ -20,7 +21,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**11** commands · **22** modules · **745** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
+**11** commands · **22** modules · **766** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
 
 ```console
 $ z64kit doctor
@@ -152,6 +153,10 @@ three different fixes, and only the first two need a new file.
 
 ## Quick start
 
+> [!TIP]
+> Never used a terminal? Read [`GUIDE.md`](GUIDE.md) instead. It assumes nothing, and the
+> whole job is one command: `z64kit` with no arguments walks you through it.
+
 ### Prerequisites
 
 | Tool | Version | Notes |
@@ -178,6 +183,15 @@ and whether a TeX engine is available. It needs no ROMs, so it is also the faste
 install worked.
 
 ### Then
+
+Or run it with no arguments for a guided flow that asks five questions and writes nothing
+until you confirm:
+
+```bash
+z64kit
+```
+
+The individual commands, for scripting or for people who prefer them:
 
 ```bash
 z64kit scan  ~/roms              # what is here, and what is wrong with any of it
@@ -234,6 +248,7 @@ z64kit merge game.z64 game.aps --no-aa --output merged.aps --apply
 | `artifacts` | Check the supplied-artifact folder against the manifest |
 | `db-update` | Download the save-type catalogue. The only command that uses the network |
 | `doctor` | Report what is installed, and check the supplied files against the manifest |
+| _no command_ | Run the guided flow: five questions, nothing written until you confirm |
 
 `organise` and `build` are two routes to the same layout. Folders are useful for copying to a disk
 by hand, for checking the naming before committing to an image, and for a drive the tool cannot
@@ -267,7 +282,7 @@ patches/          # where you put the files you supply. Generated README, no pay
 
 | Suite | Command | Covers |
 |:------|:--------|:-------|
-| Everything | `pytest` | 745 tests, coverage gate at 95% |
+| Everything | `pytest` | 766 tests, coverage gate at 95% |
 | Skip the ones needing game data | `pytest -m "not artifacts"` | Explicit form of what happens anyway when no collection is present |
 | Only the ones needing game data | `pytest -m artifacts` | Byte-for-byte image reproduction. Skips unless `Z64KIT_LIBRARY` and `Z64KIT_GOLDEN` resolve |
 | Lint and format | `ruff check src tests && ruff format --check src tests` | Style and static analysis |

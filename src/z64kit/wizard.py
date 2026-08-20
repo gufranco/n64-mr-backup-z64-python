@@ -26,6 +26,8 @@ from .fat import image
 
 ACTION_FOLDERS = "folders"
 ACTION_IMAGES = "images"
+ACTION_REPORT = "report"
+ACTION_INVENTORY = "inventory"
 
 GAME_SUFFIXES = (".z64", ".v64", ".n64", ".rom")
 LIKELY_FOLDERS = (
@@ -39,22 +41,46 @@ LIKELY_FOLDERS = (
     "Downloads",
 )
 TOTAL_STEPS = 5
+MAX_CANDIDATES = 8
+
+
+def _holds_games(folder: Path) -> bool:
+    try:
+        return any(p.suffix.lower() in GAME_SUFFIXES for p in folder.iterdir() if p.is_file())
+    except OSError:
+        return False
 
 
 def candidate_folders(home: Path, cwd: Path) -> list[Path]:
-    """Folders worth offering, so the first question is a pick rather than typing."""
+    """Folders worth offering, so the first question is a pick rather than typing.
+
+    Beyond the usual places under the home folder, this looks beside the working
+    folder: someone who unzipped the tool next to their games should see them
+    offered. A folder whose children hold the games counts too, because that is
+    what a collection already split into disks looks like.
+    """
     found: list[Path] = []
 
     def remember(folder: Path) -> None:
-        if folder.is_dir() and folder not in found:
+        if len(found) < MAX_CANDIDATES and folder.is_dir() and folder not in found:
             found.append(folder)
 
     for name in LIKELY_FOLDERS:
         remember(home / name)
-    if cwd.is_dir() and any(
-        p.suffix.lower() in GAME_SUFFIXES for p in cwd.iterdir() if p.is_file()
-    ):
-        remember(cwd)
+
+    if cwd.is_dir():
+        if _holds_games(cwd):
+            remember(cwd)
+        try:
+            children = sorted(p for p in cwd.iterdir() if p.is_dir())
+        except OSError:
+            children = []
+        for child in children:
+            if _holds_games(child) or any(
+                _holds_games(grandchild)
+                for grandchild in sorted(p for p in child.iterdir() if p.is_dir())
+            ):
+                remember(child)
     return found
 
 
@@ -192,10 +218,20 @@ def _default_runner(action: str, source: Path, output: Path, patches: str) -> in
         force=False,
         patches=patches,
         json=False,
+        no_pdf=False,
+        inventory=str(Path(output) / "cartridges.json"),
+        file=str(Path(output) / "cartridges.json"),
+        own=[],
+        show=False,
+        ask=True,
     )
     if action == ACTION_FOLDERS:
         return cli.cmd_organise(args)
-    return cli.cmd_build(args)
+    if action == ACTION_IMAGES:
+        return cli.cmd_build(args)
+    if action == ACTION_REPORT:
+        return cli.cmd_report(args)
+    return cli.cmd_inventory(args)
 
 
 def run(
@@ -256,7 +292,14 @@ def run(
         console.say("Cancelled. Nothing was written.")
         return 1
 
-    code = act(action, chosen_source, destination, str(supplied_folder))
+    patch_folder = str(supplied_folder) if supplied_folder.is_dir() else None
+    try:
+        code = act(action, chosen_source, destination, patch_folder)
+    except (OSError, ValueError) as error:
+        console.say()
+        console.say(f"That did not finish: {error}")
+        console.say("Nothing was completed. Your game files are untouched.")
+        return 1
     if code != 0:
         console.say()
         console.say("That did not finish. Nothing above this line was rolled back.")
@@ -264,11 +307,27 @@ def run(
 
     console.say()
     console.say("Done.")
+
+    try:
+        wants_catalogue = prompts.confirm(
+            console, "Write a printable catalogue to keep with the disks?", default=True
+        )
+        if wants_catalogue and act(ACTION_REPORT, chosen_source, destination, str(supplied_folder)):
+            console.say("  The catalogue did not finish. The disks are unaffected.")
+
+        wants_inventory = prompts.confirm(
+            console, "Record which cartridges you own, so gaps are reported?", default=True
+        )
+        if wants_inventory and act(ACTION_INVENTORY, chosen_source, destination, patch_folder):
+            console.say("  Recording did not finish. The disks are unaffected.")
+    except prompts.Cancelled:
+        console.say()
+
+    console.say()
     console.say("What to do next:")
     if action == ACTION_IMAGES:
         console.say("  Write an image to a Zip disk, one image per disk.")
     else:
         console.say("  Copy the contents of each folder onto its own Zip disk.")
-    console.say("  Run `z64kit report` to print a catalogue to keep with the disks.")
-    console.say("  Run `z64kit inventory --ask` to record which cartridges you own.")
+    console.say(f"  Everything produced is in {destination}.")
     return 0
