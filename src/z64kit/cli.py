@@ -25,7 +25,20 @@ import json
 import sys
 from pathlib import Path
 
-from . import aps, artifacts, compat, db, inventory, merge, naming, packing, prompts, scan, vi
+from . import (
+    aps,
+    artifacts,
+    compat,
+    db,
+    inventory,
+    merge,
+    naming,
+    packing,
+    prompts,
+    scan,
+    vi,
+    wizard,
+)
 from .fat import image, writer
 from .report import catalogue, latex, render
 
@@ -824,6 +837,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):
+        if argv is None or not argv:
+            return wizard.run(ConsoleIO())
         parser.print_usage()
         return 2
     try:

@@ -26,21 +26,25 @@ z64kit artifacts            # what is here, what is missing, what is wrong
 15 files. The checksum pair is the ROM each patch is bound to, which
 is how a patch built for another revision is refused rather than applied.
 
+A save file is listed against the game whose patch it ships with, because it
+means nothing on its own. Only patches carry target checksums; a save file is
+matched by its own digest instead.
+
 | File | Game | Purpose | Bytes | Target CRC1 / CRC2 |
 |:-----|:-----|:--------|------:|:-------------------|
 | `cc-usa.aps` | Command & Conquer (USA) | No save fix | 92,484 | `95286EB4` / `B76AD58F` |
 | `dk64-usa.aps` | Donkey Kong 64 (USA) | Boot and save fix | 74,656 | `EC58EABF` / `AD7C7169` |
-| `dk64-usa.ram` |  | Boot and save fix | 65,536 |  |
+| `dk64-usa.ram` | Donkey Kong 64 (USA) | Save data used by `dk64-usa.aps` | 65,536 | not bound to a checksum |
 | `dx-btusc.aps` | Banjo-Tooie (USA) | Crack and save fix | 121,964 | `C2E9AA9A` / `475D70AA` |
 | `ebikeusa.aps` | Excitebike 64 (USA) | Boot and save fix | 24,666 | `07861842` / `A12EBC9F` |
 | `jfg-usa.aps` | Jet Force Gemini (USA) | Boot and save fix | 62,109 | `8A6009B6` / `94ACE150` |
-| `jfg-usa.ram` |  | Boot and save fix | 65,536 |  |
+| `jfg-usa.ram` | Jet Force Gemini (USA) | Save data used by `jfg-usa.aps` | 65,536 | not bound to a checksum |
 | `kgsgood.aps` | Ken Griffey Jr.'s Slugfest (USA) | Boot fix for the good dump | 101,253 | `36281F23` / `009756CF` |
 | `mglf-usa.aps` | Mario Golf (USA) | Save fix | 92,660 | `664BA3D4` / `678A80B7` |
 | `mten-usa.aps` | Mario Tennis (USA) | Boot and save fix | 47,638 | `5001CF4F` / `F30CB3BD` |
 | `nbac2usa.aps` | NBA Courtside 2 featuring Kobe Bryant (USA) | No save fix | 217 | `916852D8` / `73DBEAEF` |
 | `swep1rus.aps` | Star Wars Episode I - Racer (USA) | Save fix | 46,818 | `72F70398` / `6556A98B` |
-| `swep1rus.eep` |  | Save fix | 512 |  |
+| `swep1rus.eep` | Star Wars Episode I - Racer (USA) | Save data used by `swep1rus.aps` | 512 | not bound to a checksum |
 | `zmm-usa.aps` | Legend of Zelda, The - Majora's Mask (USA) | Boot and save fix | 108,432 | `5354631C` / `03A2DEF0` |
 | `zoot-usa.aps` | Legend of Zelda, The - Ocarina of Time (USA) | Boot and save fix | 128,135 | `EC7011B7` / `7616D72B` |
 

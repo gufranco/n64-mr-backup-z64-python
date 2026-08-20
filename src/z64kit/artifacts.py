@@ -292,14 +292,34 @@ def inspect_folder(folder: Path | str, manifest: Manifest) -> FolderReport:
     )
 
 
-def _folder_row(entry: ArtifactEntry) -> str:
-    target = ""
+def owning_patch(manifest: Manifest, filename: str) -> ArtifactEntry | None:
+    """The patch that lists `filename` as a companion, if any.
+
+    A save file carries no game name of its own in the manifest, because it is
+    meaningless apart from the patch it ships with. Resolving the owner is what
+    lets a row say which game it belongs to instead of leaving the column blank.
+    """
+    for entry in manifest.entries():
+        if filename in entry.companions:
+            return entry
+    return None
+
+
+def _folder_row(entry: ArtifactEntry, manifest: Manifest) -> str:
     if entry.target_crc1 and entry.target_crc2:
         target = f"`{entry.target_crc1}` / `{entry.target_crc2}`"
-    return (
-        f"| `{entry.filename}` | {entry.game or ''} | {entry.description or ''} "
-        f"| {entry.size:,} | {target} |"
-    )
+    else:
+        target = "not bound to a checksum"
+
+    game = entry.game or ""
+    purpose = entry.description or entry.kind
+    if not game:
+        owner = owning_patch(manifest, entry.filename)
+        if owner is not None:
+            game = owner.game or ""
+            purpose = f"Save data used by `{owner.filename}`"
+
+    return f"| `{entry.filename}` | {game} | {purpose} | {entry.size:,} | {target} |"
 
 
 def render_folder_readme(manifest: Manifest) -> str:
@@ -341,10 +361,14 @@ def render_folder_readme(manifest: Manifest) -> str:
         f"{len(wanted)} files. The checksum pair is the ROM each patch is bound to, which",
         "is how a patch built for another revision is refused rather than applied.",
         "",
+        "A save file is listed against the game whose patch it ships with, because it",
+        "means nothing on its own. Only patches carry target checksums; a save file is",
+        "matched by its own digest instead.",
+        "",
         "| File | Game | Purpose | Bytes | Target CRC1 / CRC2 |",
         "|:-----|:-----|:--------|------:|:-------------------|",
     ]
-    lines += [_folder_row(entry) for entry in wanted]
+    lines += [_folder_row(entry, manifest) for entry in wanted]
     lines += [
         "",
         "### Digests",

@@ -263,8 +263,12 @@ class TestDoctorCommand:
 
 
 class TestNoArguments:
-    def test_shows_usage_and_exits_non_zero(self, capsys):
-        assert cli.main([]) != 0
+    def test_no_arguments_starts_the_guided_flow_rather_than_printing_usage(self, monkeypatch):
+        from z64kit import wizard
+
+        monkeypatch.setattr(wizard, "run", lambda console, **kw: 0)
+
+        assert cli.main([]) == 0
 
 
 class TestPatchLibrary:
@@ -1036,3 +1040,90 @@ class TestInventoryAsk:
         result = cli._ask_inventory(questions, already, tmp_path / "inv.json")
 
         assert result.owned == already.owned
+
+
+class TestNoArgumentsStartsTheGuidedFlow:
+    def test_an_empty_argument_list_runs_the_wizard(self, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = []
+        monkeypatch.setattr(wizard, "run", lambda console, **kw: seen.append(console) or 0)
+
+        assert cli.main([]) == 0
+        assert seen
+
+    def test_the_wizard_gets_the_real_console(self, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = []
+        monkeypatch.setattr(wizard, "run", lambda console, **kw: seen.append(console) or 0)
+
+        cli.main([])
+
+        assert isinstance(seen[0], cli.ConsoleIO)
+
+    def test_the_wizard_exit_code_is_passed_through(self, monkeypatch):
+        from z64kit import cli, wizard
+
+        monkeypatch.setattr(wizard, "run", lambda console, **kw: 1)
+
+        assert cli.main([]) == 1
+
+    def test_an_unknown_command_still_shows_usage(self, capsys):
+        from z64kit import cli
+
+        with pytest.raises(SystemExit):
+            cli.main(["not-a-command"])
+        capsys.readouterr()
+
+
+class TestPlanJson:
+    def test_emits_a_disk_list(self, tmp_path, capsys):
+        from tests.conftest import make_rom
+
+        from z64kit import cli
+
+        (tmp_path / "game.z64").write_bytes(make_rom(size=8 * 1024 * 1024))
+
+        assert cli.main(["plan", str(tmp_path), "--json"]) == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["disks"]
+
+    def test_each_disk_lists_its_games_with_the_short_name(self, tmp_path, capsys):
+        from tests.conftest import make_rom
+
+        from z64kit import cli
+
+        (tmp_path / "game.z64").write_bytes(make_rom(size=8 * 1024 * 1024))
+
+        cli.main(["plan", str(tmp_path), "--json"])
+        payload = json.loads(capsys.readouterr().out)
+
+        entry = payload["disks"][0]["games"][0]
+        assert entry["file"] == "game.z64"
+        assert entry["name83"]
+
+
+class TestDoctorUnknownFiles:
+    def test_a_stray_file_in_the_folder_is_listed_as_ignored(self, tmp_path, capsys):
+        from z64kit import cli
+
+        (tmp_path / "readme-of-my-own.txt").write_bytes(b"x")
+
+        cli.main(["doctor", "--folder", str(tmp_path)])
+        printed = capsys.readouterr().out
+
+        assert "not in the manifest" in printed
+        assert "readme-of-my-own.txt" in printed
+
+
+class TestWizardDispatchWithNoArgv:
+    def test_passing_none_reads_the_real_argv_and_starts_the_flow(self, monkeypatch):
+        import sys
+
+        from z64kit import cli, wizard
+
+        monkeypatch.setattr(sys, "argv", ["z64kit"])
+        monkeypatch.setattr(wizard, "run", lambda console, **kw: 7)
+
+        assert cli.main(None) == 7

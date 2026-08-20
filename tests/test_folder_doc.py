@@ -288,3 +288,77 @@ class TestFolderInspection:
         report = artifacts.inspect_folder(tmp_path, manifest)
 
         assert report.complete is False
+
+
+class TestCompanionRowsAreNotBlank:
+    def test_a_save_file_names_the_game_it_belongs_to(self):
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest())
+
+        row = next(line for line in text.splitlines() if "`swep1rus.eep`" in line)
+
+        assert "Star Wars Episode I - Racer (USA)" in row
+
+    def test_a_save_file_says_which_patch_it_accompanies(self):
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest())
+
+        row = next(line for line in text.splitlines() if "`swep1rus.eep`" in line)
+
+        assert "swep1rus.aps" in row
+
+    def test_no_expected_file_row_has_a_blank_game_column(self):
+        manifest = artifacts.load_default_manifest()
+        text = artifacts.render_folder_readme(manifest)
+        names = {e.filename for e in artifacts.folder_entries(manifest)}
+
+        for line in text.splitlines():
+            if not line.startswith("| `") or not line.endswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) < 5 or cells[0].strip("`") not in names:
+                continue
+            assert cells[1], f"blank game column: {line}"
+
+    def test_no_expected_file_row_has_a_blank_purpose_column(self):
+        manifest = artifacts.load_default_manifest()
+        text = artifacts.render_folder_readme(manifest)
+        names = {e.filename for e in artifacts.folder_entries(manifest)}
+
+        for line in text.splitlines():
+            if not line.startswith("| `") or not line.endswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) < 5 or cells[0].strip("`") not in names:
+                continue
+            assert cells[2], f"blank purpose column: {line}"
+
+    def test_a_patch_row_keeps_its_own_description(self):
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest())
+
+        row = next(line for line in text.splitlines() if "`swep1rus.aps`" in line)
+
+        assert "Save fix" in row
+
+    def test_the_checksum_column_explains_its_own_emptiness_for_saves(self):
+        text = artifacts.render_folder_readme(artifacts.load_default_manifest())
+
+        assert "not bound to a checksum" in text.lower() or "no checksum" in text.lower()
+
+
+class TestOwningPatch:
+    def test_finds_the_patch_that_lists_a_companion(self):
+        manifest = artifacts.load_default_manifest()
+
+        owner = artifacts.owning_patch(manifest, "swep1rus.eep")
+
+        assert owner is not None
+        assert owner.filename == "swep1rus.aps"
+
+    def test_returns_nothing_for_a_file_no_patch_claims(self):
+        manifest = artifacts.load_default_manifest()
+
+        assert artifacts.owning_patch(manifest, "cc-usa.aps") is None
+
+    def test_returns_nothing_for_a_name_the_manifest_does_not_know(self):
+        manifest = artifacts.load_default_manifest()
+
+        assert artifacts.owning_patch(manifest, "nothing.ram") is None
