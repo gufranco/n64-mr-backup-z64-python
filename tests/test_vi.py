@@ -413,10 +413,50 @@ class TestSafePatch:
         assert result.applied is False
         assert "already" in result.reason
 
-    def test_does_not_offer_the_dither_filter_because_it_is_not_in_the_table(self):
-        import inspect
+    def test_the_dither_filter_can_only_be_switched_off(self):
+        """Switching it back on would mean restoring an instruction this code never
+        wrote, and asking for a filter a ROM cannot reach means nothing."""
+        result = vi.safe_patch(self.rom_with_table(), dither_filter=True)
 
-        assert "dither_filter" not in inspect.signature(vi.safe_patch).parameters
+        assert result.applied is False
+        assert "never back on" in result.reason
+
+    def test_a_rom_that_cannot_reach_the_filter_is_reported_as_already_off(self):
+        result = vi.safe_patch(self.rom_with_table(), dither_filter=False)
+
+        assert result.applied is False
+        assert "already off" in result.reason
+
+    def test_the_dither_filter_needs_no_mode_table(self):
+        """GoldenEye 007 carries the routine and no table, so requiring one would
+        exclude exactly the ROMs that most need this."""
+        from tests.conftest import make_rom
+
+        base = bytearray(make_rom(size=vi.CHECKSUM_END + 0x2000))
+        blob, _, _, _ = rom_with_dither_request()
+        base[0x2000 : 0x2000 + len(blob)] = blob
+        rom = vi.reseal(bytes(base))
+
+        result = vi.safe_patch(rom, dither_filter=False)
+
+        assert vi.find_mode_tables(rom) == ()
+        assert result.applied is True
+        assert "dedither request neutralised" in result.reason
+
+    def test_the_result_still_verifies_after_a_dither_only_patch(self):
+        from tests.conftest import make_rom
+
+        from z64kit.rom import checksum
+
+        base = bytearray(make_rom(size=vi.CHECKSUM_END + 0x2000))
+        blob, _, _, _ = rom_with_dither_request()
+        base[0x2000 : 0x2000 + len(blob)] = blob
+        rom = vi.reseal(bytes(base))
+
+        result = vi.safe_patch(rom, dither_filter=False)
+
+        assert checksum.verify(result.data)[0] is True
+        assert vi.find_dither_requests(result.data) == ()
 
     def test_patching_twice_is_stable(self):
         once = vi.safe_patch(self.rom_with_table(), antialiasing=False).data
@@ -503,3 +543,131 @@ class TestEmitIps:
         patch = vi.make_ips([(0x2004, 0, 1)], checksum_words=bytes(0x20))
 
         assert b"\x00\x00\x10" in patch
+
+
+def dither_block(base, *, flag=0x0040, branch_op=0x04, guard_gap=1, skip=6):
+    """A minimal OS_VI_DITHER_FILTER_ON block laid out like a compiled one.
+
+    andi at base, the guard; a branch on that register clearing the setter; then
+    `lui at, 1` which is the instruction that puts bit 16 in place.
+    """
+    words = {}
+    guard = base
+    branch = base + guard_gap * 4
+    setter = branch + 8
+    words[guard] = 0x30000000 | (4 << 21) | (14 << 16) | flag
+    words[branch] = (branch_op << 26) | (14 << 21) | (0 << 16) | skip
+    words[setter] = vi.LUI_AT_ONE
+    return words, guard, branch, setter
+
+
+def rom_with_dither_request(**kwargs):
+    """A blob carrying the library signature and one dither-on block after it."""
+    blob = bytearray(0x400)
+    for i, imm in enumerate((0xFFF7, 0xFFFB, 0xFFEF, 0xFCFF)):
+        struct.pack_into(">I", blob, 0x40 + i * 8, 0x24010000 | imm)
+    words, guard, branch, setter = dither_block(0x80, **kwargs)
+    for at, word in words.items():
+        struct.pack_into(">I", blob, at, word)
+    return bytes(blob), guard, branch, setter
+
+
+class TestFindDitherRequests:
+    """The dedither filter never sits in a mode table, so the only place a ROM can
+    switch it on is osViSetSpecialFeatures. These locate that request."""
+
+    def test_finds_the_request(self):
+        blob, guard, branch, setter = rom_with_dither_request()
+
+        found = vi.find_dither_requests(blob)
+
+        assert len(found) == 1
+        assert (found[0].guard, found[0].branch, found[0].setter) == (guard, branch, setter)
+
+    def test_records_the_flag_it_matched(self):
+        blob, _, _, _ = rom_with_dither_request()
+
+        assert vi.find_dither_requests(blob)[0].flag == vi.DITHER_FILTER_ON_FLAG
+
+    def test_ignores_a_block_guarded_by_a_different_flag(self):
+        """Three retail ROMs carry the four mask constants inside an unrelated
+        routine whose block is guarded by 0x4000. Patching those would be wrong."""
+        blob, _, _, _ = rom_with_dither_request(flag=0x4000)
+
+        assert vi.find_dither_requests(blob) == ()
+
+    def test_accepts_a_branch_likely_as_the_guard(self):
+        blob, _, _, _ = rom_with_dither_request(branch_op=0x14)
+
+        assert len(vi.find_dither_requests(blob)) == 1
+
+    def test_finds_the_guard_when_it_sits_in_an_earlier_delay_slot(self):
+        """Majora's Mask schedules the andi far from its branch, so a fixed offset
+        would miss it."""
+        blob, guard, _, _ = rom_with_dither_request(guard_gap=6)
+
+        assert vi.find_dither_requests(blob)[0].guard == guard
+
+    def test_ignores_a_branch_whose_target_does_not_clear_the_setter(self):
+        blob, _, _, _ = rom_with_dither_request(skip=1)
+
+        assert vi.find_dither_requests(blob) == ()
+
+    def test_finds_nothing_without_the_library_signature(self):
+        blob = bytearray(0x400)
+        struct.pack_into(">I", blob, 0x80, vi.LUI_AT_ONE)
+
+        assert vi.find_dither_requests(bytes(blob)) == ()
+
+    def test_finds_nothing_in_empty_data(self):
+        assert vi.find_dither_requests(bytes(0x400)) == ()
+
+
+class TestClearDitherRequests:
+    def test_zeroes_the_guard_immediate(self):
+        blob, guard, _, _ = rom_with_dither_request()
+
+        out, changes = vi.clear_dither_requests(blob)
+
+        assert struct.unpack_from(">I", out, guard)[0] & 0xFFFF == 0
+        assert len(changes) == 1
+
+    def test_changes_exactly_one_byte(self):
+        blob, _, _, _ = rom_with_dither_request()
+
+        out, _ = vi.clear_dither_requests(blob)
+
+        assert sum(1 for a, b in zip(blob, out, strict=True) if a != b) == 1
+
+    def test_leaves_the_setter_alone(self):
+        """Neutering the lui would suppress the filter and leave the AA_MODE
+        override that accompanies it forcing anti-aliasing on regardless."""
+        blob, _, _, setter = rom_with_dither_request()
+
+        out, _ = vi.clear_dither_requests(blob)
+
+        assert struct.unpack_from(">I", out, setter)[0] == vi.LUI_AT_ONE
+
+    def test_the_request_is_gone_afterwards(self):
+        blob, _, _, _ = rom_with_dither_request()
+
+        out, _ = vi.clear_dither_requests(blob)
+
+        assert vi.find_dither_requests(out) == ()
+
+    def test_running_it_twice_changes_nothing_more(self):
+        blob, _, _, _ = rom_with_dither_request()
+
+        once, _ = vi.clear_dither_requests(blob)
+        twice, changes = vi.clear_dither_requests(once)
+
+        assert twice == once
+        assert changes == ()
+
+    def test_leaves_a_rom_without_a_request_untouched(self):
+        blob = bytes(0x400)
+
+        out, changes = vi.clear_dither_requests(blob)
+
+        assert out == blob
+        assert changes == ()

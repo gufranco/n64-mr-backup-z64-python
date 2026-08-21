@@ -561,6 +561,8 @@ def _vi_requests(args: argparse.Namespace) -> dict[str, bool]:
         out["gamma_dither"] = False
     if args.no_gamma:
         out["gamma"] = False
+    if args.no_dither:
+        out["dither_filter"] = False
     return out
 
 
@@ -666,9 +668,10 @@ def _cmd_vi_patch(args: argparse.Namespace, requests: dict[str, bool]) -> int:
         print("Nothing was written. Add --apply with --output to write patched copies.")
     else:
         print(f"Patched copies written to {out_dir}. The originals were not touched.")
-    print("\nThe dither filter is not offered here. It never appears in a mode table,")
-    print("so a switch for it would silently do nothing. Removing it needs an edit to")
-    print("osViSetSpecialFeatures, which this command does not perform.")
+    if not args.no_dither:
+        print("\nThe dedither filter is the main source of blur and is not covered by the")
+        print("switches above, because it never appears in a mode table. Add --no-dither")
+        print("to clear it as well.")
     return 0
 
 
@@ -1010,6 +1013,11 @@ def build_parser() -> argparse.ArgumentParser:
     vic.add_argument("--no-aa", action="store_true", help="disable anti-aliasing")
     vic.add_argument("--no-divot", action="store_true", help="disable the divot filter")
     vic.add_argument("--no-gamma-dither", action="store_true", help="disable gamma dithering")
+    vic.add_argument(
+        "--no-dither",
+        action="store_true",
+        help="disable the dedither filter, the main source of blur",
+    )
     vic.add_argument("--no-gamma", action="store_true", help="disable gamma correction")
     vic.add_argument("--output", default=None, help="folder for patched copies")
     vic.add_argument("--apply", action="store_true", help="actually write, otherwise dry run")
@@ -1023,6 +1031,11 @@ def build_parser() -> argparse.ArgumentParser:
     mg.add_argument("--no-aa", action="store_true", help="disable anti-aliasing")
     mg.add_argument("--no-divot", action="store_true", help="disable the divot filter")
     mg.add_argument("--no-gamma-dither", action="store_true", help="disable gamma dithering")
+    mg.add_argument(
+        "--no-dither",
+        action="store_true",
+        help="disable the dedither filter, the main source of blur",
+    )
     mg.add_argument("--no-gamma", action="store_true", help="disable gamma correction")
     mg.add_argument("--output", default=None, help="path for the merged patch")
     mg.add_argument("--apply", action="store_true", help="actually write, otherwise dry run")
