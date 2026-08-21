@@ -15,13 +15,11 @@ def row(**over):
     base = {
         "disk": "Zip Disk 01",
         "title": "Wave Race 64 (USA)",
-        "name83": "WAVER64.Z64",
         "mib": 8,
         "cic": "6102",
         "save": "eeprom512",
         "status": "native",
         "flags": "",
-        "crc1": "11223344",
     }
     base.update(over)
     return catalogue.Row(**base)
@@ -148,13 +146,11 @@ class TestPerGameRequirements:
             catalogue.Row(
                 disk="Zip Disk 01",
                 title=title,
-                name83="BLOCKED",
                 mib=16,
                 cic="6102",
                 save="EEPROM 16Kb",
                 status="needs-donor",
                 flags="!",
-                crc1="AABBCCDD",
                 requirement=requirement,
             )
         ]
@@ -194,13 +190,11 @@ class TestPerGameRequirements:
             catalogue.Row(
                 disk="Zip Disk 01",
                 title="Fine Game (USA)",
-                name83="FINE",
                 mib=8,
                 cic="6102",
                 save="EEPROM 4Kb",
                 status="native",
                 flags="",
-                crc1="11223344",
                 requirement="",
             )
         ]
@@ -227,13 +221,11 @@ class TestPerGameRequirements:
         row = catalogue.Row(
             disk="d",
             title="t",
-            name83="N",
             mib=1,
             cic="6102",
             save="None",
             status="native",
             flags="",
-            crc1="0",
         )
 
         assert row.requirement == ""
@@ -257,7 +249,6 @@ class TestRowsFromCarriesRequirements:
 
         rows = catalogue.rows_from(
             layout,
-            {"dk64.z64": "DK64"},
             {"dk64.z64": "eeprom2k"},
             compat.load_rules(),
             set(),
@@ -268,9 +259,7 @@ class TestRowsFromCarriesRequirements:
     def test_a_game_needing_nothing_gets_an_empty_sentence(self):
         layout = [("Zip Disk 01", [FakeGame(filename="ok.z64", stem="Fine Game (USA)")])]
 
-        rows = catalogue.rows_from(
-            layout, {"ok.z64": "FINE"}, {"ok.z64": "eeprom512"}, compat.load_rules(), set()
-        )
+        rows = catalogue.rows_from(layout, {"ok.z64": "eeprom512"}, compat.load_rules(), set())
 
         assert rows[0].requirement == ""
 
@@ -279,13 +268,11 @@ def video_row(title="A Game", disk="Zip Disk 01", **video):
     return catalogue.Row(
         disk=disk,
         title=title,
-        name83="AGAME.Z64",
         mib=16,
         cic="6102",
         save="none",
         status="native",
         flags="",
-        crc1="AABBCCDD",
         video=catalogue.Video(**video) if video or video == {} else None,
     )
 
@@ -322,7 +309,7 @@ class TestVideoState:
     def test_the_summary_names_both_when_both_apply(self):
         state = catalogue.Video(modes=8, antialiasing_on=6, dither_requests=1)
 
-        assert "AA" in state.summary
+        assert "anti-aliasing" in state.summary
         assert "dedither" in state.summary
 
 
@@ -382,13 +369,11 @@ class TestVideoSection:
             catalogue.Row(
                 disk="Zip Disk 01",
                 title="Unknown",
-                name83="U.Z64",
                 mib=8,
                 cic="6102",
                 save="none",
                 status="native",
                 flags="",
-                crc1="AABBCCDD",
             )
         ]
 
@@ -403,13 +388,11 @@ class TestVideoSection:
             catalogue.Row(
                 disk="Zip Disk 01",
                 title="Unknown",
-                name83="U.Z64",
                 mib=8,
                 cic="6102",
                 save="none",
                 status="native",
                 flags="",
-                crc1="AABBCCDD",
             )
         ]
 

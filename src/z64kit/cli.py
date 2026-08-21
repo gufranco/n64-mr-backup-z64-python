@@ -528,13 +528,12 @@ def cmd_report(args: argparse.Namespace) -> int:
     held = inventory.load(Path(args.inventory)) if args.inventory else inventory.Inventory()
 
     layout = _layout(found)
-    names = _names(found)
     saves = _save_types(found)
     patches = _patch_library(getattr(args, "patches", None))
     patched = {
         g.filename for g in found.games if found.companions_for(g) or _patches_for(patches, g)
     }
-    rows = catalogue.rows_from(layout, names, saves, rules, patched)
+    rows = catalogue.rows_from(layout, saves, rules, patched)
 
     generated = _today()
     document = catalogue.build(rows, rules=rules, held=held, generated=generated)

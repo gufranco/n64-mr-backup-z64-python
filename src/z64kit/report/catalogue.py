@@ -68,31 +68,33 @@ class Video:
 
     @property
     def summary(self) -> str:
+        """What a patch would take out, named rather than abbreviated.
+
+        A bare "AA" left the reader to work out whether it meant the setting was
+        on or that it would be removed, and said nothing about the dedither filter
+        going with it.
+        """
         if not self.checksum_valid:
-            return "no boot chip"
+            return "refused, no boot chip"
         wanted = []
         if self.aa_patchable:
-            wanted.append("AA")
+            wanted.append("anti-aliasing")
         if self.dither_patchable:
             wanted.append("dedither")
         if wanted:
-            return ", ".join(wanted)
-        if self.modes == 0 and self.dither_requests == 0:
-            return "unreachable"
-        return "clean"
+            return "removes " + " and ".join(wanted)
+        return "nothing to remove"
 
 
 @dataclass(frozen=True)
 class Row:
     disk: str
     title: str
-    name83: str
     mib: int
     cic: str
     save: str
     status: str
     flags: str
-    crc1: str
     requirement: str = ""
     video: Video | None = None
 
@@ -165,13 +167,13 @@ def _video_sections(rows: list[Row]) -> list[str]:
         latex.longtable(
             ["What", "Games"],
             [
-                ["Anti-aliasing on, can be cleared", str(len(aa))],
-                ["Dedither filter reachable, can be cleared", str(len(dither))],
+                ["Anti-aliasing can be removed", str(len(aa))],
+                ["Dedither filter can be removed", str(len(dither))],
                 [
                     "Dedither filter already unreachable",
                     str(len(known) - len(dither) - len(blocked)),
                 ],
-                ["Checksum invalid, nothing can be resealed", str(len(blocked))],
+                ["Refused, checksum matches no known boot chip", str(len(blocked))],
                 ["Could not be read", str(len(unreadable))],
             ],
             widths=["100mm", "20mm"],
@@ -184,7 +186,7 @@ def _video_sections(rows: list[Row]) -> list[str]:
         body.append(latex.section("Games with a video patch available"))
         body.append(
             latex.longtable(
-                ["Game", "Modes", "AA on", "Divot", "Gamma dither", "Can clear"],
+                ["Game", "Modes", "AA on", "Divot", "Gamma dither", "What a patch removes"],
                 [
                     [
                         r.title,
@@ -197,7 +199,7 @@ def _video_sections(rows: list[Row]) -> list[str]:
                     for r in changeable
                     if r.video is not None
                 ],
-                widths=["58mm", "14mm", "13mm", "13mm", "22mm", "38mm"],
+                widths=["54mm", "13mm", "12mm", "12mm", "21mm", "42mm"],
                 align=["l", "r", "r", "r", "r", "l"],
             )
         )
@@ -291,33 +293,20 @@ def build(rows: list[Row], *, rules: Rules, held: Inventory, generated: str) -> 
         )
         body.append(
             latex.longtable(
-                ["Game", "On disk", "MiB", "CIC", "Save", "Status", "Video", "CRC1", "Flags"],
+                ["Game", "CIC", "Save", "Status", "Video", "Flags"],
                 [
                     [
                         r.title,
-                        r.name83,
-                        str(r.mib),
                         r.cic,
                         rules.save_label(r.save),
                         STATUS_LABEL.get(r.status, r.status),
                         r.video.summary if r.video is not None else VIDEO_UNREAD,
-                        r.crc1,
                         r.flags,
                     ]
                     for r in on_disk
                 ],
-                widths=[
-                    "38mm",
-                    "22mm",
-                    "8mm",
-                    "11mm",
-                    "18mm",
-                    "15mm",
-                    "24mm",
-                    "15mm",
-                    "8mm",
-                ],
-                align=["l", "l", "r", "l", "l", "l", "l", "l", "l"],
+                widths=["66mm", "12mm", "22mm", "18mm", "42mm", "8mm"],
+                align=["l", "l", "l", "l", "l", "l"],
             )
         )
 
@@ -366,12 +355,11 @@ def video_for(game: Game) -> Video | None:
 
 def rows_from(
     layout: list[tuple[str, list[Game]]],
-    names: dict[str, str],
     saves: dict[str, str],
     rules: Rules,
     patched: set[str],
 ) -> list[Row]:
-    """Build rows from a disk layout, an 8.3 name assignment and a save type lookup."""
+    """Build rows from a disk layout and a save type lookup."""
     out: list[Row] = []
     for disk_name, games in layout:
         for game in games:
@@ -384,18 +372,15 @@ def rows_from(
                 has_patch=game.filename in patched,
             )
             verdict = classify(candidate, rules)
-            base = names.get(game.filename, "")
             out.append(
                 Row(
                     disk=disk_name,
                     title=game.stem,
-                    name83=f"{base}.{game.true_extension}" if base else "",
                     mib=game.size // (1024 * 1024),
                     cic=game.cic,
                     save=candidate.save,
                     status=verdict.status,
                     flags=flags_for(verdict, game, has_companion=game.filename in patched),
-                    crc1=game.crc1,
                     requirement=requirement_for(verdict, rules),
                     video=video_for(game),
                 )
