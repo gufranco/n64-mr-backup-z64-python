@@ -58,17 +58,17 @@ On Windows, type `python` instead of `python3` everywhere in this guide.
 Copy this line into the terminal and press Enter:
 
 ```
-pip install https://github.com/gufranco/n64-mr-backup-z64-python/archive/refs/tags/v1.0.2.zip
+pip install https://github.com/gufranco/n64-mr-backup-z64-python/archive/refs/tags/latest.zip
 ```
 
-That is the whole install. It downloads the released version straight from the
-project page and sets it up.
+That is the whole install. It downloads the newest released version straight from
+the project page and sets it up.
 
 This program comes from that page and nowhere else, so anything claiming to be it
 somewhere else did not come from here.
 
-To install a newer version later, run the same line with the newer version number
-from the [releases page](https://github.com/gufranco/n64-mr-backup-z64-python/releases).
+To upgrade later, run that same line again. It always fetches the newest release,
+so there is no version number to look up and nothing to change.
 
 Then check it worked:
 
@@ -169,7 +169,7 @@ three will not boot without one. The program cannot include these files, so you
 have to supply them yourself.
 
 **The important one is a single file called `z64patch.dat`.** It is the Z64's own
-patch collection, it covers 75 games on its own, and the Z64 knows how to read it.
+patch collection, it covers 47 games on its own, and the Z64 knows how to read it.
 The program copies it onto every disk it makes, because the Z64 only finds it if it
 sits in the disk's root folder next to the games. If it is missing, the program
 still works but says so, and games that needed a patch will load unpatched, which

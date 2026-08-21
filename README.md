@@ -21,16 +21,22 @@
   <a href="#commands">Commands</a>
 </p>
 
-**11** commands · **zero** runtime dependencies · **byte-reproducible** images · coverage gated at **95%** · types checked **strict**
+**11** commands · **zero** runtime dependencies · **905** tests · **byte-reproducible** images · coverage gated at **95%** · types checked **strict**
 
 ```console
 $ z64kit doctor
-artifact manifest   17 entries
+artifact manifest   90 entries
 compatibility rules memory limit 32 MiB
 TeX engine          tectonic
 latex builder       685 byte document renders
 volume capacity     100431872 bytes usable
 granularity         23 games per disk
+
+supplied files    patches
+                  14 of 14 verified
+                  75 more verified, for games not in this collection
+
+  everything the manifest names is present and verified.
 ```
 
 ---
@@ -61,7 +67,7 @@ arithmetic rather than a guess. First-fit-decreasing packing reports whether it 
 
 ### 8.3 names you can still read
 Candidate generation with scoring, so `The Legend of Zelda: Ocarina of Time` becomes something a
-human recognises rather than `LZELDOOT`. Verified against 1,414 real names.
+human recognises rather than `LZELDOOT`. Tuned against 1,414 real release names.
 
 </td>
 </tr>
@@ -118,8 +124,10 @@ unprovable mode table all stop the operation and say why.
 ## No copyrighted content
 
 The package contains no ROM data, no patch payloads, no firmware, and no save files, and it never
-downloads any. What it ships is a manifest of **17** entries describing files you already own by
-name, size, SHA-256, CRC32, and target checksums.
+downloads any. What it ships is a manifest of **90** entries describing files you already own by
+name, size, SHA-256, CRC32, and target checksums. **14** of them are files you place in a folder;
+the other **75** describe what is inside the unit's own patch database, so a copy of it can be
+verified without unpacking it. One entry describes the BIOS, which stays on the unit.
 
 That manifest is used to recognise what you have, verify it, and diagnose a mismatch in terms you
 can act on. A wrong file produces "this is the headered variant, strip the first 512 bytes", not
@@ -131,18 +139,17 @@ accident. [`patches/README.md`](patches/README.md) lists every expected file wit
 SHA-256, CRC32, the game it belongs to, and the ROM checksums each patch is bound to. It is
 generated from the manifest and a test fails if the two ever disagree.
 
-Most of it is one file. `z64patch.dat` is the unit's own patch database, it already carries 75 of
-the patches known for this platform, and the unit reads it directly to find the right one. **It has
-to sit in the root of every disk**, so `build` and `organise` copy it there and say so when it is
-absent. Only 13 files beyond it are ever needed: four copy-protection cracks with their header
-sidecars, three save files, and two patches that never made it into the database. Shipping the
-database verbatim also sidesteps how the unit matches a patch to a ROM, because nothing inside it
-is renamed.
+Most of it is one file. `z64patch.dat` is the unit's own patch database, it carries 47 patches with
+their 28 header sidecars, and the unit reads it directly to find the right one. **It has to sit in
+the root of every disk**, so `build` and `organise` copy it there and say so when it is absent. Only
+13 files beyond it are ever needed: four copy-protection cracks with their header sidecars, three
+save files, and two patches that never made it into the database. Shipping the database verbatim
+also sidesteps how the unit matches a patch to a ROM, because nothing inside it is renamed.
 
 ```console
 $ z64kit artifacts
 folder   patches
-expected 15 files, 14 verified
+expected 14 files, 13 verified
 
 missing (1)
   dx-btusc.aps       121964 bytes  Banjo-Tooie (USA)
@@ -175,8 +182,11 @@ three different fixes, and only the first two need a new file.
 ### Install
 
 ```bash
-pip install https://github.com/gufranco/n64-mr-backup-z64-python/archive/refs/tags/v1.0.2.zip
+pip install https://github.com/gufranco/n64-mr-backup-z64-python/archive/refs/tags/latest.zip
 ```
+
+`latest` is a tag the release job moves onto each new release, so that line never carries a version
+and never goes stale. To pin one instead, swap `latest` for a version tag such as `v1.1.1`.
 
 Or clone it to work on it:
 

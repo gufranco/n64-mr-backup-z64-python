@@ -28,7 +28,7 @@ name. Without `--source` every file below is treated as required.
 | Region | USA releases only |
 | Games needing a separate file | 6 |
 | Files expected here | 14 |
-| Patches the database already covers | 75 |
+| Patches the database already covers | 47 |
 | Filenames | lowercase throughout |
 | Decides acceptance | SHA-256, and nothing else |
 
@@ -56,10 +56,10 @@ project, and that failure mode was real on this platform.
 
 ## Start with one file
 
-`z64patch.dat` is the unit's own patch database, and it already covers
-75 of the patches known for this platform. The unit reads it
-directly and finds the right patch inside it, so you supply one file instead of
-dozens.
+`z64patch.dat` is the unit's own patch database, and it already carries
+47 patches with their header sidecars, 75 files in all. The
+unit reads it directly and finds the right patch inside it, so you supply one
+file instead of dozens.
 
 | | |
 |:--|:--|

@@ -276,9 +276,20 @@ def folder_entries(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
 
 
 def database_contents(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
-    """What `z64patch.dat` already covers, listed so a reader can confirm it."""
+    """Every file inside `z64patch.dat`, patches and header sidecars alike."""
     chosen = [e for e in manifest.entries() if e.in_patch_database]
     return tuple(sorted(chosen, key=lambda e: e.filename))
+
+
+def database_patches(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
+    """Only the patches inside `z64patch.dat`.
+
+    Fewer than `database_contents`, which also counts the header sidecar each
+    patch is paired with. Saying "75 patches" when 75 is the file count
+    overstates the coverage by the number of sidecars.
+    """
+    chosen = [e for e in database_contents(manifest) if e.kind == "patch"]
+    return tuple(chosen)
 
 
 def other_entries(manifest: Manifest) -> tuple[ArtifactEntry, ...]:
@@ -452,7 +463,7 @@ def render_folder_readme(manifest: Manifest) -> str:
         "| Region | USA releases only |",
         f"| Games needing a separate file | {games} |",
         f"| Files expected here | {len(wanted)} |",
-        f"| Patches the database already covers | {len(database_contents(manifest))} |",
+        f"| Patches the database already covers | {len(database_patches(manifest))} |",
         "| Filenames | lowercase throughout |",
         "| Decides acceptance | SHA-256, and nothing else |",
         "",
@@ -483,13 +494,14 @@ def render_folder_readme(manifest: Manifest) -> str:
     database = next((e for e in wanted if e.kind == "patch-db"), None)
     if database is not None:
         covered = database_contents(manifest)
+        patched = database_patches(manifest)
         lines += [
             "## Start with one file",
             "",
-            f"`{database.filename}` is the unit's own patch database, and it already covers",
-            f"{len(covered)} of the patches known for this platform. The unit reads it",
-            "directly and finds the right patch inside it, so you supply one file instead of",
-            "dozens.",
+            f"`{database.filename}` is the unit's own patch database, and it already carries",
+            f"{len(patched)} patches with their header sidecars, {len(covered)} files in all. The",
+            "unit reads it directly and finds the right patch inside it, so you supply one",
+            "file instead of dozens.",
             "",
             "| | |",
             "|:--|:--|",

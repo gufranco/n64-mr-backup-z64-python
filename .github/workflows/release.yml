@@ -88,6 +88,39 @@ jobs:
           CHECK
         shell: bash
 
+      # cyclonedx-py records where it found the package, which on a runner is a
+      # build path nobody can act on. It discloses nothing, since /home/runner is
+      # the fixed home on every hosted runner, but it reads like a leaked local
+      # path and it answers no question a reader of an SBOM has.
+      - name: Drop the build path from the bill of materials
+        run: |
+          python - <<'STRIP'
+          import json
+          from pathlib import Path
+
+          held = Path("sbom.json")
+          bom = json.loads(held.read_text())
+          for component in bom.get("components", ()):
+              kept = [
+                  ref
+                  for ref in component.get("externalReferences", ())
+                  if not str(ref.get("url", "")).startswith("file://")
+              ]
+              if kept:
+                  component["externalReferences"] = kept
+              else:
+                  component.pop("externalReferences", None)
+          held.write_text(json.dumps(bom, indent=2, sort_keys=True) + "\n")
+          leaked = [
+              one
+              for one in json.dumps(bom).split('"')
+              if one.startswith("file://")
+          ]
+          print(f"::error title=Build path retained::{leaked}") if leaked else None
+          raise SystemExit(1 if leaked else 0)
+          STRIP
+        shell: bash
+
       # Keyless, so verifying it needs no key from anybody here. What the
       # signature binds is this workflow in this repository, which says the file
       # came from the build rather than from somebody's laptop.
@@ -107,4 +140,25 @@ jobs:
             exit 0
           fi
           gh release upload "${tag}" sbom.json sbom.json.sigstore.json --clobber
+        shell: bash
+
+      # The install line in README.md and GUIDE.md points at refs/tags/latest,
+      # so it never carries a version and never goes stale. This moves that tag
+      # onto whatever was just released. Every vN.N.N tag stays immutable for
+      # anyone who wants to pin one.
+      - name: Move the latest tag onto this release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -z "${tag}" ]; then
+            echo "::notice title=No tag::Nothing was released, so latest stays where it is."
+            exit 0
+          fi
+          sha=$(git rev-list -n 1 "${tag}")
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/latest" \
+            -f sha="${sha}" -F force=true >/dev/null 2>&1 ||
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/latest" -f sha="${sha}" >/dev/null
+          echo "latest -> ${tag} (${sha})"
         shell: bash
