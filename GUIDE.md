@@ -55,17 +55,20 @@ On Windows, type `python` instead of `python3` everywhere in this guide.
 
 ## Step 2: install the program
 
-It is not on the Python package index yet, so it installs from the source. Download
-the repository as a ZIP from
-[the project page](https://github.com/gufranco/n64-mr-backup-z64-python), unzip it,
-then in the terminal move into the unzipped folder and run:
+Copy this line into the terminal and press Enter:
 
 ```
-pip install .
+pip install https://github.com/gufranco/n64-mr-backup-z64-python/archive/refs/tags/v1.0.2.zip
 ```
 
-To move into a folder, type `cd ` with a space after it, then drag the folder from
-Finder or Explorer into the terminal window and press Enter.
+That is the whole install. It downloads the released version straight from the
+project page and sets it up.
+
+This program comes from that page and nowhere else, so anything claiming to be it
+somewhere else did not come from here.
+
+To install a newer version later, run the same line with the newer version number
+from the [releases page](https://github.com/gufranco/n64-mr-backup-z64-python/releases).
 
 Then check it worked:
 

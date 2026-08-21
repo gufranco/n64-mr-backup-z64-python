@@ -31,6 +31,12 @@ describing what it is for.
 Emulator behaviour, hardware behaviour, and the correctness of third-party
 patches are all outside what this project can control.
 
+## Where this is distributed
+
+This repository's releases page, and nowhere else. Anything under this name from
+another source is not from this project, and saying so is worth more than most of
+the table above.
+
 ## Supply chain
 
 Every release carries a CycloneDX bill of materials and a Sigstore bundle over

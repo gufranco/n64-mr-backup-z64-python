@@ -175,10 +175,21 @@ three different fixes, and only the first two need a new file.
 ### Install
 
 ```bash
+pip install https://github.com/gufranco/n64-mr-backup-z64-python/archive/refs/tags/v1.0.2.zip
+```
+
+Or clone it to work on it:
+
+```bash
 git clone https://github.com/gufranco/n64-mr-backup-z64-python.git
 cd n64-mr-backup-z64-python
 pip install -e ".[dev]"
 ```
+
+> [!NOTE]
+> Every release lives on this repository's [releases page](https://github.com/gufranco/n64-mr-backup-z64-python/releases)
+> and carries a CycloneDX bill of materials with a Sigstore bundle over it, so what a
+> tag ships can be verified rather than trusted.
 
 ### Verify
 

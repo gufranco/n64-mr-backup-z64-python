@@ -43,6 +43,14 @@ hardware, the disk format or a patch, say how it was established. Several
 findings in this project's history reversed on measurement, and the ones that
 survived did so because somebody ran them rather than reasoned about them.
 
+## Distribution
+
+Releases go to this repository's releases page and nowhere else.
+
+Each one carries a CycloneDX bill of materials generated from an environment holding
+nothing but this package, and a Sigstore bundle over it. That is what makes the empty
+dependency tree checkable instead of merely claimed.
+
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/). The release is cut
