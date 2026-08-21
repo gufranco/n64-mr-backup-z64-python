@@ -16,6 +16,7 @@ import struct
 import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 SCHEMA_VERSION = 1
 DEFAULT_MANIFEST_PATH = Path(__file__).parent / "data" / "artifacts.manifest.json"
@@ -67,7 +68,7 @@ class VerifyResult:
     reason: str = ""
 
 
-def _entry_from_dict(item: dict) -> ArtifactEntry:
+def _entry_from_dict(item: dict[str, Any]) -> ArtifactEntry:
     for key in FORBIDDEN_KEYS:
         if key in item:
             raise ManifestError(
@@ -191,7 +192,7 @@ def build_entry(
     )
 
 
-def entry_to_dict(entry: ArtifactEntry) -> dict:
+def entry_to_dict(entry: ArtifactEntry) -> dict[str, Any]:
     out = {
         "name": entry.name,
         "kind": entry.kind,

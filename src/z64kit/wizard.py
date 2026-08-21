@@ -84,7 +84,9 @@ def candidate_folders(home: Path, cwd: Path) -> list[Path]:
     return found
 
 
-def _inspect(folder: Path):
+def _inspect(
+    folder: Path,
+) -> tuple[int, int, list[str], list[tuple[str, str]], list[tuple[str, str]]]:
     """Return the supplied-file state as plain values the steps can render."""
     manifest = artifacts.load_default_manifest()
     report = artifacts.inspect_folder(folder, manifest)
@@ -206,7 +208,7 @@ def step_pick_action(console: prompts.Console) -> str:
     return ACTION_FOLDERS if picked == 0 else ACTION_IMAGES
 
 
-def _default_runner(action: str, source: Path, output: Path, patches: str) -> int:
+def _default_runner(action: str, source: Path, output: Path, patches: str | None) -> int:
     """Hand the work to the same commands the command line uses."""
     import argparse
 
@@ -241,7 +243,7 @@ def run(
     supplied: Path | None = None,
     home: Path | None = None,
     cwd: Path | None = None,
-    runner: Callable[[str, Path, Path, str], int] | None = None,
+    runner: Callable[[str, Path, Path, str | None], int] | None = None,
 ) -> int:
     """Walk the whole flow. Returns 0 only when something was actually produced."""
     act = runner or _default_runner

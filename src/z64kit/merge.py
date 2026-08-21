@@ -35,7 +35,7 @@ class UnsafeMergeError(RuntimeError):
 @dataclass(frozen=True)
 class Merged:
     patch: bytes
-    cic: str
+    cic: str | None
     video_changes: tuple[tuple[int, int, int], ...] = ()
     existing_records: int = 0
 

@@ -22,8 +22,10 @@ from __future__ import annotations
 
 import collections
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 DEFAULT_RULES_PATH = Path(__file__).parent / "data" / "compat.json"
 
@@ -73,13 +75,13 @@ def _normalise(text: str) -> str:
     return "".join(c for c in text.lower() if c.isalnum())
 
 
-def _matches(title: str, keys) -> bool:
+def _matches(title: str, keys: Iterable[str]) -> bool:
     haystack = _normalise(title)
     return any(_normalise(k) in haystack for k in keys if k)
 
 
 class Rules:
-    def __init__(self, raw: dict) -> None:
+    def __init__(self, raw: dict[str, Any]) -> None:
         self._raw = raw
         unit = raw["unit"]
         self.memory_mib: int = unit["memory_mib"]
@@ -91,23 +93,23 @@ class Rules:
         self.unsupported_rom_extensions: frozenset[str] = frozenset(
             unit["unsupported_rom_extensions"]
         )
-        self.save_hardware: dict = raw["save_hardware"]
-        self.boot_chips: dict = raw["boot_chips"]
-        self.boot_cartridge: dict = raw["boot_cartridge"]
-        self.donors: dict = raw["donor_cartridges"]
+        self.save_hardware: dict[str, Any] = raw["save_hardware"]
+        self.boot_chips: dict[str, Any] = raw["boot_chips"]
+        self.boot_cartridge: dict[str, Any] = raw["boot_cartridge"]
+        self.donors: dict[str, dict[str, object]] = raw["donor_cartridges"]
         self.donor_source: str = raw["donor_source"]
-        self.one_save_per_cartridge: dict = raw["one_save_per_cartridge"]
+        self.one_save_per_cartridge: dict[str, Any] = raw["one_save_per_cartridge"]
         self._no_boot = raw["will_not_boot_without_donor"]
-        self.oversized: tuple[dict, ...] = tuple(raw["oversized_titles"])
+        self.oversized: tuple[dict[str, Any], ...] = tuple(raw["oversized_titles"])
 
     def is_emulated(self, save: str) -> bool:
         return bool(self.save_hardware.get(save, {}).get("emulated", True))
 
     def donor_for(self, save: str) -> str | None:
-        return self.save_hardware.get(save, {}).get("donor")
+        return str(self.save_hardware.get(save, {}).get("donor") or "") or None
 
     def save_label(self, save: str) -> str:
-        return self.save_hardware.get(save, {}).get("label", save)
+        return str(self.save_hardware.get(save, {}).get("label", save))
 
     def boot_chip_action(self, cic: str) -> str:
         if cic in DEFAULT_BOOT_CHIPS:
@@ -115,16 +117,16 @@ class Rules:
         entry = self.boot_chips.get(cic)
         if entry is None:
             return f"Boot chip {cic} is not in the known set, test this title first"
-        return entry["note"]
+        return str(entry["note"])
 
     def will_not_boot(self, title: str) -> bool:
         return any(_matches(title, [e["title"]]) for e in self._no_boot)
 
     def donor_label(self, donor: str) -> str:
-        return self.donors.get(donor, {}).get("label", donor)
+        return str(self.donors.get(donor, {}).get("label", donor))
 
     def donor_reference(self, donor: str) -> str:
-        return self.donors.get(donor, {}).get("reference", "")
+        return str(self.donors.get(donor, {}).get("reference", ""))
 
 
 def load_rules(path: Path | str = DEFAULT_RULES_PATH) -> Rules:
@@ -193,7 +195,8 @@ def summarise(candidates: list[Candidate], rules: Rules) -> Summary:
 def donor_also_carrying(rules: Rules, donor: str, chip: str) -> tuple[str, ...]:
     """Cartridges that carry this save chip and the wanted boot chip at once."""
     entry = rules.donors.get(donor, {})
-    return tuple(entry.get(f"also_carrying_{chip}", ()))
+    shared = entry.get(f"also_carrying_{chip}", ())
+    return tuple(str(one) for one in shared) if isinstance(shared, list) else ()
 
 
 def _join_sentences(parts: list[str]) -> str:
@@ -211,13 +214,13 @@ def requirement_for(verdict: Verdict, rules: Rules) -> str:
     cartridge to buy or put in the slot, which is what the reader of a printed
     catalogue actually has to decide.
     """
+    parts: list[str] = []
     if verdict.status == STATUS_TOO_LARGE:
-        parts = ["too large for the unit to load at all"]
+        parts.append("too large for the unit to load at all")
         if verdict.note:
             parts.append(verdict.note)
         return _join_sentences(parts)
 
-    parts: list[str] = []
     if verdict.will_not_boot:
         parts.append("will not boot without a donor cartridge")
 

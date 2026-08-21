@@ -41,7 +41,7 @@ from . import (
     wizard,
 )
 from .fat import image, writer
-from .report import catalogue, latex, render
+from .report import catalogue, hardware, latex, render
 from .rom import header
 
 
@@ -68,12 +68,21 @@ def _names(found: scan.Collection) -> dict[str, str]:
     return assigned
 
 
-def _candidates(found: scan.Collection) -> list[compat.Candidate]:
+def _candidates(
+    found: scan.Collection, saves: dict[str, str] | None = None
+) -> list[compat.Candidate]:
+    """The classifier's view of a collection.
+
+    The save type has to be passed in. It is a property of the cartridge board
+    rather than of the ROM, so it comes from the fetched catalogue, and defaulting
+    it to none would report every game as needing no donor cartridge at all.
+    """
+    lookup = saves or {}
     return [
         compat.Candidate(
             key=g.filename,
             title=g.stem,
-            save="none",
+            save=lookup.get(g.filename, "none"),
             cic=g.cic,
             size=g.size,
             has_patch=bool(found.companions_for(g)),
@@ -179,7 +188,9 @@ def _binding_key(sidecar: bytes | None, payload: bytes) -> bytes | None:
     return None
 
 
-def _patches_for(library: dict, game) -> list[tuple[str, str, bytes]]:
+def _patches_for(
+    library: dict[bytes, list[tuple[str, str, bytes]]], game: scan.Game
+) -> list[tuple[str, str, bytes]]:
     """Look a game up by full header first, then by the checksum pair alone.
 
     Both keys come from the already parsed header, so this touches no files.
@@ -202,7 +213,7 @@ def _scan_or_exit(root: str) -> scan.Collection:
         raise SystemExit(2) from exc
 
 
-def cmd_scan(args) -> int:
+def cmd_scan(args: argparse.Namespace) -> int:
     found = _scan_or_exit(args.source)
     if args.json:
         print(
@@ -248,7 +259,7 @@ def cmd_scan(args) -> int:
     return 0
 
 
-def cmd_plan(args) -> int:
+def cmd_plan(args: argparse.Namespace) -> int:
     found = _scan_or_exit(args.source)
     layout = _layout(found)
     names = _names(found)
@@ -293,7 +304,7 @@ def cmd_plan(args) -> int:
     return 0
 
 
-def cmd_build(args) -> int:
+def cmd_build(args: argparse.Namespace) -> int:
     found = _scan_or_exit(args.source)
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -347,7 +358,7 @@ def cmd_build(args) -> int:
     return 0
 
 
-def cmd_organise(args) -> int:
+def cmd_organise(args: argparse.Namespace) -> int:
     found = _scan_or_exit(args.source)
     out_dir = Path(args.output)
     if out_dir.exists() and any(out_dir.iterdir()) and not args.force:
@@ -406,7 +417,11 @@ class ConsoleIO:
         return input(prompt)
 
 
-def _ask_inventory(questions, held, path):
+def _ask_inventory(
+    questions: tuple[inventory.Question, ...],
+    held: inventory.Inventory,
+    path: Path,
+) -> inventory.Inventory:
     """Tick off the cartridges owned, then record the answers.
 
     Reading a list of things you might own and then re-running the command with
@@ -438,12 +453,12 @@ def _ask_inventory(questions, held, path):
     return chosen
 
 
-def cmd_inventory(args) -> int:
+def cmd_inventory(args: argparse.Namespace) -> int:
     found = _scan_or_exit(args.source)
     rules = compat.load_rules()
     path = Path(args.file)
     held = inventory.load(path)
-    games = _candidates(found)
+    games = _candidates(found, _save_types(found))
 
     if args.own:
         held = inventory.Inventory(owned=frozenset(args.own), recorded=True)
@@ -480,7 +495,7 @@ def cmd_inventory(args) -> int:
     return 0
 
 
-def _save_types(found) -> dict[str, str]:
+def _save_types(found: scan.Collection) -> dict[str, str]:
     """Which save chip each game carries, from the fetched catalogue.
 
     The chip is a property of the board and cannot be read from the ROM, so it has
@@ -505,7 +520,7 @@ def _save_types(found) -> dict[str, str]:
     return out
 
 
-def cmd_report(args) -> int:
+def cmd_report(args: argparse.Namespace) -> int:
     found = _scan_or_exit(args.source)
     rules = compat.load_rules()
     out_dir = Path(args.output)
@@ -520,13 +535,22 @@ def cmd_report(args) -> int:
     }
     rows = catalogue.rows_from(layout, names, saves, rules, patched)
 
-    source = catalogue.build(rows, rules=rules, held=held, generated=_today())
-    result = render.write(source, out_dir / "catalogue", compile_pdf=not args.no_pdf)
+    generated = _today()
+    document = catalogue.build(rows, rules=rules, held=held, generated=generated)
+    result = render.write(document, out_dir / "catalogue", compile_pdf=not args.no_pdf)
     print(result.message)
+
+    # A second document, because the question it answers is asked at a different
+    # moment. The catalogue is read with the disks in hand; this one is read
+    # before spending money on cartridges.
+    shopping = inventory.shopping_list(_candidates(found, saves), held, rules)
+    gear = hardware.build(shopping, rules=rules, held=held, generated=generated)
+    written = render.write(gear, out_dir / "hardware", compile_pdf=not args.no_pdf)
+    print(written.message)
     return 0
 
 
-def _vi_requests(args) -> dict:
+def _vi_requests(args: argparse.Namespace) -> dict[str, bool]:
     out = {}
     if args.no_aa:
         out["antialiasing"] = False
@@ -539,7 +563,7 @@ def _vi_requests(args) -> dict:
     return out
 
 
-def cmd_vi(args) -> int:
+def cmd_vi(args: argparse.Namespace) -> int:
     """Report the video configuration, and optionally edit it under guard."""
     requests = _vi_requests(args)
     if requests:
@@ -606,7 +630,7 @@ def cmd_vi(args) -> int:
     return 0
 
 
-def _cmd_vi_patch(args, requests) -> int:
+def _cmd_vi_patch(args: argparse.Namespace, requests: dict[str, bool]) -> int:
     if args.apply and not args.output:
         print("--apply needs --output, so the source is never written over", file=sys.stderr)
         return 2
@@ -655,14 +679,16 @@ def _collection_checksums(source: str | None) -> set[tuple[str, str]] | None:
     return {(g.crc1, g.crc2) for g in found.games}
 
 
-def _report_artifact_folder(folder: Path, manifest, source: str | None = None) -> None:
+def _report_artifact_folder(
+    folder: Path, manifest: artifacts.Manifest, source: str | None = None
+) -> None:
     """Print the folder's state. Shared with `artifacts` so the two cannot disagree."""
     checksums = _collection_checksums(source)
     required = None if checksums is None else artifacts.required_for(manifest, checksums)
     report = artifacts.inspect_folder(folder, manifest, required=required)
     wanted = artifacts.folder_entries(manifest)
     if required is not None:
-        wanted = [e for e in wanted if e.filename in required]
+        wanted = tuple(e for e in wanted if e.filename in required)
     by_name = {e.filename: e for e in wanted}
 
     print(f"\nsupplied files    {folder}")
@@ -704,7 +730,7 @@ def _report_artifact_folder(folder: Path, manifest, source: str | None = None) -
         print(f"  expected file are in {folder / 'README.md'}.")
 
 
-def cmd_doctor(args) -> int:
+def cmd_doctor(args: argparse.Namespace) -> int:
     manifest = artifacts.load_default_manifest()
     rules = compat.load_rules()
     engine = render.find_engine()
@@ -727,7 +753,7 @@ def cmd_doctor(args) -> int:
     return 0
 
 
-def cmd_artifacts(args) -> int:
+def cmd_artifacts(args: argparse.Namespace) -> int:
     """Report what the supplied-artifact folder holds, or rewrite its documentation."""
     manifest = artifacts.load_default_manifest()
     folder = Path(args.folder or artifacts.FOLDER_NAME)
@@ -744,7 +770,7 @@ def cmd_artifacts(args) -> int:
     report = artifacts.inspect_folder(folder, manifest, required=required)
     wanted = artifacts.folder_entries(manifest)
     if required is not None:
-        wanted = [e for e in wanted if e.filename in required]
+        wanted = tuple(e for e in wanted if e.filename in required)
 
     if args.json:
         print(
@@ -798,7 +824,7 @@ def cmd_artifacts(args) -> int:
     return 1
 
 
-def cmd_db_update(_args) -> int:
+def cmd_db_update(_args: argparse.Namespace) -> int:
     """Fetch the save-type catalogue. This is the only command that uses the network."""
     try:
         written = db.update()
@@ -815,7 +841,7 @@ def cmd_db_update(_args) -> int:
     return 0
 
 
-def cmd_merge(args) -> int:
+def cmd_merge(args: argparse.Namespace) -> int:
     """Fold the requested video change into a patch the game already needs."""
     requests = _vi_requests(args)
     if not requests:
@@ -985,7 +1011,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_usage()
         return 2
     try:
-        return args.func(args)
+        return int(args.func(args))
     except PatchFolderMissingError as error:
         print(error)
         return 2

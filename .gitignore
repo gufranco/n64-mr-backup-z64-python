@@ -94,3 +94,6 @@ coverage.xml
 
 # Planning notes
 /specs/
+
+# Type checker cache
+.mypy_cache/

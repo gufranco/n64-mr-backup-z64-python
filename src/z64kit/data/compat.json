@@ -1,104 +1,110 @@
 {
- "schema": 1,
- "note": "Compatibility rules for the Mr. Backup Z64. Every entry names the source it came from. Titles are matched by distinctive substring against the release name, so a key must be specific enough not to collide with a different game in the same series.",
- "unit": {
-  "memory_mbit": 256,
-  "memory_mib": 32,
-  "memory_source": "Official manual, September 1998, feature list: in-built 256Mbit memory",
-  "larger_titles_note": "Support for 512 Mbit titles appears in the BIOS 2.18 release notes as planned and never delivered, so a larger ROM cannot be loaded from disk under any BIOS.",
-  "rom_extensions": ["ROM", "V64", "USA", "PAL", "JAP", "Z64", "ZIP"],
-  "patch_extensions": ["ZP1", "IP1", "ZP2", "IP2", "ZPS", "IPS", "APS", "NCS"],
-  "aux_extensions": ["ZCC", "BEM", "MPK", "INI", "EEP", "RAM"],
-  "extension_source": "Tables read from the unit's own menu binary after decompression",
-  "unsupported_rom_extensions": ["N64"],
-  "unsupported_note": "The little endian form is absent from the extension table, so convert such a dump to big endian before use."
- },
- "save_hardware": {
-  "none": {"label": "None", "emulated": true},
-  "eeprom512": {"label": "EEPROM 4Kb", "emulated": true},
-  "eeprom2k": {"label": "EEPROM 16Kb", "emulated": false, "donor": "eeprom16k"},
-  "sram32k": {"label": "SRAM 256Kb", "emulated": true},
-  "sram96k": {"label": "SRAM 768Kb", "emulated": true},
-  "flash128k": {"label": "FlashRAM 1Mb", "emulated": false, "donor": "flashram"}
- },
- "boot_chips": {
-  "6101": {"emulated": true, "note": "Handled as the default family."},
-  "6102": {"emulated": true, "note": "The common case, and the chip a standard boot cartridge carries."},
-  "6103": {"emulated": true, "note": "Set Boot Chip to 6103 in Game Setup."},
-  "6105": {"emulated": true, "note": "Emulated at about 99 percent. Country Fix and Slow Down must both be off."},
-  "6106": {"emulated": true, "note": "Set Boot Chip to 6106 in Game Setup."},
-  "7101": {"emulated": true, "note": "Equivalent to 6102 for this purpose."}
- },
- "boot_cartridge": {
-  "requirement": "A cartridge carrying a 4 KB EEPROM save chip and a 6102 or 7101 security chip.",
-  "source": "Unit FAQ, entry on boot cartridges: as standard boot cart you should use Super Mario 64 or any other cart with a 4KB eeprom savechip and a 6102/7101 security chip",
-  "examples": ["Super Mario 64", "Mario Kart 64", "Wave Race 64", "GoldenEye 007"],
-  "note": "Together with boot chip emulation and the country fix, this boots almost every title."
- },
- "donor_cartridges": {
-  "eeprom16k": {
-   "label": "16 Kbit EEPROM donor",
-   "reference": "Star Wars Episode I Racer",
-   "also_carrying_6102": ["Mario Tennis", "Ridge Racer 64"],
-   "unlocks": [
-    "Cruis'n World",
-    "Donkey Kong 64",
-    "Excitebike 64",
-    "Kobe Bryant in NBA Courtside",
-    "Mario Party 3",
-    "Mario Tennis",
-    "Perfect Dark",
-    "Ridge Racer 64",
-    "Episode I - Racer",
-    "Yoshi's Story"
-   ]
+  "schema": 1,
+  "note": "Compatibility rules for the Mr. Backup Z64. Every entry names the source it came from. Titles are matched by distinctive substring against the release name, so a key must be specific enough not to collide with a different game in the same series.",
+  "unit": {
+    "memory_mbit": 256,
+    "memory_mib": 32,
+    "memory_source": "Official manual, September 1998, feature list: in-built 256Mbit memory",
+    "larger_titles_note": "Support for 512 Mbit titles appears in the BIOS 2.18 release notes as planned and never delivered, so a larger ROM cannot be loaded from disk under any BIOS.",
+    "rom_extensions": ["ROM", "V64", "USA", "PAL", "JAP", "Z64", "ZIP"],
+    "patch_extensions": ["ZP1", "IP1", "ZP2", "IP2", "ZPS", "IPS", "APS", "NCS"],
+    "aux_extensions": ["ZCC", "BEM", "MPK", "INI", "EEP", "RAM"],
+    "extension_source": "Tables read from the unit's own menu binary after decompression",
+    "unsupported_rom_extensions": ["N64"],
+    "unsupported_note": "The little endian form is absent from the extension table, so convert such a dump to big endian before use."
   },
-  "flashram": {
-   "label": "FlashRAM donor",
-   "reference": "Command & Conquer",
-   "also_carrying_6102": [
-    "Command & Conquer",
-    "Mega Man 64",
-    "NBA Courtside 2",
-    "Pokemon Puzzle League",
-    "StarCraft 64",
-    "Tigger's Honey Hunt",
-    "WWF No Mercy"
-   ],
-   "unlocks": [
-    "Command & Conquer",
-    "Jet Force Gemini",
-    "Ken Griffey Jr's Slugfest",
-    "Majora's Mask",
-    "Mega Man 64",
-    "NBA Courtside 2",
-    "Pokemon Puzzle League",
-    "Pokemon Snap",
-    "Pokemon Stadium",
-    "Starcraft 64",
-    "Tigger's Honey Hunt"
-   ]
-  }
- },
- "donor_source": "Unit FAQ, entry on boot cartridges, which lists the titles each save cartridge serves",
- "one_save_per_cartridge": {
-  "rule": true,
-  "source": "Unit FAQ: you can only save on game's savegame on a single cart. To save more than one game you need multiple save carts",
-  "consequence": "Keeping progress in several unemulated-save titles at once needs one donor cartridge per title."
- },
- "will_not_boot_without_donor": [
-  {
-   "title": "Mario Party 3",
-   "donor": "eeprom16k",
-   "source": "Unit FAQ: Mario Party 3 doesn't even boot without a 16Kb eeprom boot cart like SW Racer"
-  }
- ],
- "oversized_titles": [
-  {"title": "Conker's Bad Fur Day", "mib": 64},
-  {"title": "Pokemon Stadium 2", "mib": 64},
-  {"title": "Resident Evil 2", "mib": 64},
-  {"title": "Ogre Battle 64 - Person of Lordly Caliber", "mib": 40},
-  {"title": "Paper Mario", "mib": 40}
- ],
- "oversized_note": "Measured from a public release set. The tool also flags any scanned ROM above the memory limit, so this list is a convenience rather than the authority."
+  "save_hardware": {
+    "none": { "label": "None", "emulated": true },
+    "eeprom512": { "label": "EEPROM 4Kb", "emulated": true },
+    "eeprom2k": { "label": "EEPROM 16Kb", "emulated": false, "donor": "eeprom16k" },
+    "sram32k": { "label": "SRAM 256Kb", "emulated": true },
+    "sram96k": { "label": "SRAM 768Kb", "emulated": true },
+    "flash128k": { "label": "FlashRAM 1Mb", "emulated": false, "donor": "flashram" }
+  },
+  "boot_chips": {
+    "6101": { "emulated": true, "note": "Handled as the default family." },
+    "6102": {
+      "emulated": true,
+      "note": "The common case, and the chip a standard boot cartridge carries."
+    },
+    "6103": { "emulated": true, "note": "Set Boot Chip to 6103 in Game Setup." },
+    "6105": {
+      "emulated": true,
+      "note": "Emulated at about 99 percent. Country Fix and Slow Down must both be off."
+    },
+    "6106": { "emulated": true, "note": "Set Boot Chip to 6106 in Game Setup." },
+    "7101": { "emulated": true, "note": "Equivalent to 6102 for this purpose." }
+  },
+  "boot_cartridge": {
+    "requirement": "A cartridge carrying a 4 KB EEPROM save chip and a 6102 or 7101 security chip.",
+    "source": "Unit FAQ, entry on boot cartridges: as standard boot cart you should use Super Mario 64 or any other cart with a 4KB eeprom savechip and a 6102/7101 security chip",
+    "examples": ["Super Mario 64", "Mario Kart 64", "Wave Race 64", "GoldenEye 007"],
+    "note": "Together with boot chip emulation and the country fix, this boots almost every title."
+  },
+  "donor_cartridges": {
+    "eeprom16k": {
+      "label": "16 Kbit EEPROM donor",
+      "reference": "Star Wars Episode I Racer",
+      "also_carrying_6102": ["Mario Tennis", "Ridge Racer 64"],
+      "unlocks": [
+        "Cruis'n World",
+        "Donkey Kong 64",
+        "Excitebike 64",
+        "Kobe Bryant in NBA Courtside",
+        "Mario Party 3",
+        "Mario Tennis",
+        "Perfect Dark",
+        "Ridge Racer 64",
+        "Episode I - Racer",
+        "Yoshi's Story"
+      ]
+    },
+    "flashram": {
+      "label": "FlashRAM donor",
+      "reference": "Command & Conquer",
+      "also_carrying_6102": [
+        "Command & Conquer",
+        "Mega Man 64",
+        "NBA Courtside 2",
+        "Pokemon Puzzle League",
+        "StarCraft 64",
+        "Tigger's Honey Hunt",
+        "WWF No Mercy"
+      ],
+      "unlocks": [
+        "Command & Conquer",
+        "Jet Force Gemini",
+        "Ken Griffey Jr's Slugfest",
+        "Majora's Mask",
+        "Mega Man 64",
+        "NBA Courtside 2",
+        "Pokemon Puzzle League",
+        "Pokemon Snap",
+        "Pokemon Stadium",
+        "Starcraft 64",
+        "Tigger's Honey Hunt"
+      ]
+    }
+  },
+  "donor_source": "Unit FAQ, entry on boot cartridges, which lists the titles each save cartridge serves",
+  "one_save_per_cartridge": {
+    "rule": true,
+    "source": "Unit FAQ: you can only save on game's savegame on a single cart. To save more than one game you need multiple save carts",
+    "consequence": "Keeping progress in several unemulated-save titles at once needs one donor cartridge per title."
+  },
+  "will_not_boot_without_donor": [
+    {
+      "title": "Mario Party 3",
+      "donor": "eeprom16k",
+      "source": "Unit FAQ: Mario Party 3 doesn't even boot without a 16Kb eeprom boot cart like SW Racer"
+    }
+  ],
+  "oversized_titles": [
+    { "title": "Conker's Bad Fur Day", "mib": 64 },
+    { "title": "Pokemon Stadium 2", "mib": 64 },
+    { "title": "Resident Evil 2", "mib": 64 },
+    { "title": "Ogre Battle 64 - Person of Lordly Caliber", "mib": 40 },
+    { "title": "Paper Mario", "mib": 40 }
+  ],
+  "oversized_note": "Measured from a public release set. The tool also flags any scanned ROM above the memory limit, so this list is a convenience rather than the authority."
 }

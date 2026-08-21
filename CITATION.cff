@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+title: n64-mr-backup-z64-python
+message: If you use this software, please cite it as below.
+type: software
+authors:
+  - given-names: Gustavo
+    family-names: Franco
+    alias: gufranco
+repository-code: https://github.com/gufranco/n64-mr-backup-z64-python
+abstract: >-
+  Builds verified Mr. Backup Z64 Zip 100 disk images from a Nintendo 64 ROM
+  collection: 8.3 naming that stays readable, FAT16 construction, provably
+  minimal disk count, byte-reproducible output, and printable catalogues.
+  Distributes no copyrighted content, only the hashes needed to identify it.
+keywords:
+  - nintendo-64
+  - mr-backup-z64
+  - retrocomputing
+  - fat16
+  - preservation
+license: MIT

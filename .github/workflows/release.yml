@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Semantic release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install release tooling
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec semantic-release
+
+      # A bill of materials for what actually ships, and a signature over it.
+      #
+      # The interesting claim about this package is not its dependency tree: it
+      # is that the tree is empty. Nothing here imports anything outside the
+      # standard library at runtime, which is what lets it run on a machine that
+      # has only Python. That is worth checking rather than asserting, so the
+      # SBOM is generated from a fresh environment holding nothing but this
+      # package and the step after it fails if anything else turns up.
+      - name: Describe what ships
+        run: |
+          python -m venv .sbom
+          .sbom/bin/pip install --quiet --disable-pip-version-check .
+          python -m pip install --disable-pip-version-check cyclonedx-bom==6.0.0
+          python -m cyclonedx_py environment .sbom \
+            --output-format json --outfile sbom.json
+        shell: bash
+
+      - name: Nothing ships but the package itself
+        run: |
+          python - <<'CHECK'
+          import json
+          import sys
+          from pathlib import Path
+
+          held = json.loads(Path("sbom.json").read_text())
+          named = sorted(one["name"] for one in held.get("components", ()))
+          allowed = {"pip", "n64-mr-backup-z64-python"}
+          extra = [one for one in named if one not in allowed]
+          print(f"components: {', '.join(named) or 'none'}")
+          if extra:
+              print(f"::error title=New runtime dependency::{', '.join(extra)}")
+              sys.exit(1)
+          CHECK
+        shell: bash
+
+      # Keyless, so verifying it needs no key from anybody here. What the
+      # signature binds is this workflow in this repository, which says the file
+      # came from the build rather than from somebody's laptop.
+      - name: Sign it
+        run: |
+          python -m pip install --disable-pip-version-check sigstore==3.6.1
+          python -m sigstore sign sbom.json --bundle sbom.json.sigstore.json
+        shell: bash
+
+      - name: Attach both to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -z "${tag}" ]; then
+            echo "::notice title=No tag::Nothing was released, so there is nothing to attach."
+            exit 0
+          fi
+          gh release upload "${tag}" sbom.json sbom.json.sigstore.json --clobber
+        shell: bash

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "n64-mr-backup-z64-python"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Build verified Mr. Backup Z64 Zip 100 disk images and printable catalogues from an N64 ROM collection"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: System :: Filesystems",
     "Topic :: Utilities",
+    "Typing :: Typed",
 ]
 dependencies = []
 
@@ -36,6 +37,10 @@ z64kit = "z64kit.cli:main"
 [project.urls]
 Source = "https://github.com/gufranco/n64-mr-backup-z64-python"
 Issues = "https://github.com/gufranco/n64-mr-backup-z64-python/issues"
+
+[tool.hatch.version]
+path = "src/z64kit/version.py"
+pattern = "VERSION = \"(?P<version>[^\"]+)\""
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/z64kit"]
@@ -67,6 +72,35 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "RUF"]
 ignore = ["RUF001"]
+
+[tool.mypy]
+# Strict, plus the optional error classes the version offers. This code decides
+# what lands on a disk and what a patch binds to, so a None or a width crossing a
+# boundary it should not is exactly the class of defect worth catching before the
+# bytes are written. The settings live here so a local run and CI agree.
+strict = true
+python_version = "3.11"
+warn_unreachable = true
+warn_no_return = true
+strict_equality = true
+extra_checks = true
+enable_error_code = [
+  "explicit-override",
+  "ignore-without-code",
+  "possibly-undefined",
+  "redundant-expr",
+  "truthy-bool",
+  "truthy-iterable",
+  "unused-awaitable",
+]
+files = ["src/z64kit"]
+
+[[tool.mypy.overrides]]
+# The tests build deliberately malformed inputs to prove the code refuses them,
+# so they hand wrong types in on purpose. Checking them strictly would mean
+# annotating a lie.
+module = "tests.*"
+ignore_errors = true
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]

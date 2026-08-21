@@ -20,6 +20,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import compat
 from .compat import STATUS_NEEDS_DONOR, STATUS_TOO_LARGE, Candidate, Rules, classify
 
 BOOT_KEY = "boot"
@@ -109,7 +110,7 @@ def questions(games: list[Candidate], rules: Rules) -> tuple[Question, ...]:
                     f"Do you have a cartridge carrying {rules.donor_label(donor)}? "
                     "Without one, these titles cannot save."
                 ),
-                examples=tuple(rules.donors.get(donor, {}).get("also_carrying_6102", ())),
+                examples=compat.donor_also_carrying(rules, donor, "6102"),
                 unlocks=len(titles),
                 titles=tuple(sorted(titles)),
             )

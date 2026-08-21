@@ -357,6 +357,8 @@ def reseal(rom: bytes, cic: str | None = None) -> bytes:
         )
     chosen = cic or checksum.verify(rom)[1] or DEFAULT_RESEAL_CIC
     pair = checksum.compute(rom, chosen)
+    if pair is None:
+        raise ValueError(f"the checksum could not be computed over {len(rom)} bytes")
     out = bytearray(rom)
     struct.pack_into(">I", out, CRC1_OFFSET, pair[0])
     struct.pack_into(">I", out, CRC2_OFFSET, pair[1])

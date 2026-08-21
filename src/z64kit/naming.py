@@ -123,7 +123,14 @@ def _balanced(tokens: list[str], maxlen: int) -> list[str] | None:
     return [tokens[i][: lengths[i]] if i in lengths else tokens[i] for i in range(len(tokens))]
 
 
-def _score(parts, source, dropped, maxlen, *, is_initials=False):
+def _score(
+    parts: list[str],
+    source: list[str],
+    dropped: list[str],
+    maxlen: int,
+    *,
+    is_initials: bool = False,
+) -> int | None:
     joined = "".join(parts)
     if not joined or len(joined) > maxlen:
         return None
@@ -192,33 +199,39 @@ def candidates(title: str, maxlen: int = MAX_LEN) -> list[str]:
 
             for generator in ("full", "balanced", "head", "initials"):
                 if generator == "full":
-                    parts, source, initials = base[:], base, False
+                    candidate: list[str] | None = base[:]
+                    source, initials = base, False
                 elif generator == "balanced":
-                    parts, source, initials = _balanced(base, maxlen), base, False
+                    candidate = _balanced(base, maxlen)
+                    source, initials = base, False
                 elif generator == "head":
-                    alpha = [i for i, t in enumerate(base) if not t.isdigit()]
-                    if len(alpha) < 2:
+                    alpha_at = [i for i, t in enumerate(base) if not t.isdigit()]
+                    if len(alpha_at) < 2:
                         continue
                     design = [
-                        t if (i == alpha[0] or t.isdigit()) else t[0] for i, t in enumerate(base)
+                        t if (i == alpha_at[0] or t.isdigit()) else t[0] for i, t in enumerate(base)
                     ]
-                    parts, source, initials = _balanced(design, maxlen), design, False
+                    candidate = _balanced(design, maxlen)
+                    source, initials = design, False
                 else:
                     alpha = [t for t in base if not t.isdigit()]
                     if len(alpha) < 2:
                         continue
                     letters = "".join(t[0] for t in alpha)
-                    parts, placed = [], False
+                    built: list[str] = []
+                    placed = False
                     for token in base:
                         if token.isdigit():
-                            parts.append(token)
+                            built.append(token)
                         elif not placed:
-                            parts.append(letters)
+                            built.append(letters)
                             placed = True
+                    candidate = built
                     source, initials = base, True
 
-                if not parts:
+                if not candidate:
                     continue
+                parts = candidate
                 value = _score(parts, source, dropped, maxlen, is_initials=initials)
                 if value is not None:
                     scored.append((value, -len("".join(parts)), "".join(parts)))

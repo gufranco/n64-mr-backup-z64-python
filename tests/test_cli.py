@@ -1325,3 +1325,117 @@ class TestReportUsesRealSaveTypes:
 
         doc = (tmp_path / "out" / "catalogue.tex").read_text(encoding="utf-8")
         assert "P" in doc
+
+
+class TestReportWritesTheHardwareDocument:
+    def args(self, tmp_path, source):
+        import argparse
+
+        return argparse.Namespace(
+            source=str(source),
+            output=str(tmp_path / "out"),
+            inventory=None,
+            no_pdf=True,
+            patches=None,
+        )
+
+    def test_it_writes_both_documents(self, tmp_path, monkeypatch):
+        from tests.conftest import make_rom
+
+        from z64kit import cli, db
+
+        source = tmp_path / "roms"
+        source.mkdir()
+        (source / "game.z64").write_bytes(make_rom())
+        monkeypatch.setattr(db, "load_default", lambda: db.parse(""))
+
+        assert cli.cmd_report(self.args(tmp_path, source)) == 0
+
+        assert (tmp_path / "out" / "catalogue.tex").exists()
+        assert (tmp_path / "out" / "hardware.tex").exists()
+
+    def test_the_hardware_document_names_what_to_buy(self, tmp_path, monkeypatch):
+        from tests.conftest import make_rom
+
+        from z64kit import cli, db
+
+        source = tmp_path / "roms"
+        source.mkdir()
+        (source / "dk64.z64").write_bytes(make_rom(cart="DO", region="E"))
+        monkeypatch.setattr(
+            db, "load_default", lambda: db.parse("ID:NDOE cic6105|eeprom2k # DONKEY KONG 64\n")
+        )
+
+        cli.cmd_report(self.args(tmp_path, source))
+
+        doc = (tmp_path / "out" / "hardware.tex").read_text(encoding="utf-8")
+        assert "16 Kbit EEPROM" in doc
+
+    def test_both_documents_are_reported_to_the_user(self, tmp_path, monkeypatch, capsys):
+        from tests.conftest import make_rom
+
+        from z64kit import cli, db
+
+        source = tmp_path / "roms"
+        source.mkdir()
+        (source / "game.z64").write_bytes(make_rom())
+        monkeypatch.setattr(db, "load_default", lambda: db.parse(""))
+
+        cli.cmd_report(self.args(tmp_path, source))
+        printed = capsys.readouterr().out
+
+        assert "catalogue" in printed
+        assert "hardware" in printed
+
+
+class TestCandidatesCarryTheirSaveType:
+    def test_a_game_gets_the_save_type_it_was_given(self, tmp_path):
+        from tests.conftest import make_rom
+
+        from z64kit import cli, scan
+
+        source = tmp_path / "roms"
+        source.mkdir()
+        (source / "dk64.z64").write_bytes(make_rom(cart="DO", region="E"))
+        found = scan.scan(str(source))
+
+        made = cli._candidates(found, {"dk64.z64": "eeprom2k"})
+
+        assert made[0].save == "eeprom2k"
+
+    def test_a_game_with_no_entry_falls_back_to_none(self, tmp_path):
+        from tests.conftest import make_rom
+
+        from z64kit import cli, scan
+
+        source = tmp_path / "roms"
+        source.mkdir()
+        (source / "game.z64").write_bytes(make_rom())
+        found = scan.scan(str(source))
+
+        assert cli._candidates(found, {})[0].save == "none"
+
+    def test_the_inventory_command_asks_about_a_real_donor(self, tmp_path, monkeypatch, capsys):
+        import argparse
+
+        from tests.conftest import make_rom
+
+        from z64kit import cli, db
+
+        source = tmp_path / "roms"
+        source.mkdir()
+        (source / "dk64.z64").write_bytes(make_rom(cart="DO", region="E"))
+        monkeypatch.setattr(
+            db, "load_default", lambda: db.parse("ID:NDOE cic6105|eeprom2k # DONKEY KONG 64\n")
+        )
+
+        args = argparse.Namespace(
+            source=str(source),
+            file=str(tmp_path / "inv.json"),
+            own=[],
+            show=False,
+            ask=False,
+        )
+        assert cli.cmd_inventory(args) == 0
+
+        assert "16 Kbit EEPROM" in capsys.readouterr().out

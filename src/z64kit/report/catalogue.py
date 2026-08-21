@@ -13,8 +13,9 @@ from __future__ import annotations
 import collections
 from dataclasses import dataclass
 
-from ..compat import Candidate, Rules, classify, requirement_for
+from ..compat import Candidate, Rules, Verdict, classify, requirement_for
 from ..inventory import Inventory
+from ..scan import Game
 from . import latex
 
 STATUS_LABEL = {
@@ -50,7 +51,7 @@ class Row:
     requirement: str = ""
 
 
-def flags_for(verdict, game, *, has_companion: bool) -> str:
+def flags_for(verdict: Verdict, game: Game, *, has_companion: bool) -> str:
     out = ""
     if verdict.status == "patched":
         out += "P"
@@ -190,7 +191,13 @@ def build(rows: list[Row], *, rules: Rules, held: Inventory, generated: str) -> 
     )
 
 
-def rows_from(layout, names, saves, rules: Rules, patched: set[str]) -> list[Row]:
+def rows_from(
+    layout: list[tuple[str, list[Game]]],
+    names: dict[str, str],
+    saves: dict[str, str],
+    rules: Rules,
+    patched: set[str],
+) -> list[Row]:
     """Build rows from a disk layout, an 8.3 name assignment and a save type lookup."""
     out: list[Row] = []
     for disk_name, games in layout:

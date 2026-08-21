@@ -103,7 +103,7 @@ class Volume:
 
     def _fat_get(self, cluster: int) -> int:
         offset = image.fat_lba(0) * image.SECTOR + cluster * 2
-        return struct.unpack_from("<H", self._data, offset)[0]
+        return int(struct.unpack_from("<H", self._data, offset)[0])
 
     def _fat_set(self, cluster: int, value: int) -> None:
         for copy in range(image.NUM_FATS):
@@ -130,7 +130,8 @@ class Volume:
         raise OutOfSpaceError(f"needs {count} clusters, {self.free_clusters()} free")
 
     def _chain(self, first: int) -> list[int]:
-        chain, cluster = [], first
+        chain: list[int] = []
+        cluster = first
         while 2 <= cluster < 0xFFF8 and len(chain) < image.cluster_count() + 2:
             chain.append(cluster)
             cluster = self._fat_get(cluster)
@@ -284,7 +285,7 @@ class Volume:
             else:
                 movable.append(raw)
 
-        def sort_key(raw: bytearray):
+        def sort_key(raw: bytearray) -> tuple[int, str, bytes]:
             stored = bytes(raw[0:11])
             shown = display_name(stored)
             external = (key or {}).get(shown)

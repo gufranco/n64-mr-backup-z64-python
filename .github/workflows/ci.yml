@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  lint:
+    name: Format and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install ruff
+        run: pipx install ruff==0.16.3
+
+      - name: Check formatting
+        run: ruff format --check .
+
+      - name: Lint
+        run: ruff check --output-format=github .
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install the formatter
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Check that every JSON file is formatted
+        run: pnpm run format:check
+
+  types:
+    name: Types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install the type checker
+        run: pipx install mypy==1.18.2
+
+      # Strict, with every optional error class the version offers. This code
+      # decides what lands on a disk and what a patch binds to, so a None or a
+      # width crossing a boundary is exactly what this catches. The settings live
+      # in pyproject.toml so a local run and this one agree.
+      - name: Every annotation has to hold
+        run: mypy
+
+  test:
+    name: Tests on Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest]
+        include:
+          - python: "3.13"
+            os: macos-latest
+          - python: "3.13"
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install the test tooling
+        run: python -m pip install --disable-pip-version-check pytest==8.3.4 pytest-cov==6.0.0
+
+      # No ROMs, no patches, no cached catalogue and no network. That is the
+      # state a contributor clones into, and the suite has to pass there or the
+      # project cannot be worked on by anybody who does not already own a
+      # collection. Tests that need those files carry a marker and skip.
+      - name: Run the suite against nothing but the repository
+        run: python -m pytest tests/ -q -p no:randomly
+        env:
+          PYTHONPATH: src
+
+  distribution:
+    name: The wheel carries no game data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build it
+        run: |
+          python -m pip install --disable-pip-version-check build==1.2.2.post1
+          python -m build
+
+      # The whole claim of this project is that it identifies copyrighted files
+      # rather than carrying them. That claim is worth checking mechanically on
+      # every change rather than trusting a reviewer to notice.
+      - name: Nothing copyrighted ships
+        run: |
+          python - <<'CHECK'
+          import re
+          import sys
+          import zipfile
+          from pathlib import Path
+
+          wheel = next(Path("dist").glob("*.whl"))
+          names = zipfile.ZipFile(wheel).namelist()
+          banned = re.compile(r"\.(z64|v64|n64|rom|aps|ips|zps|hdr|ram|eep|fla|sra|img|dat)$", re.I)
+          found = [one for one in names if banned.search(one)]
+          print(f"{len(names)} files in {wheel.name}")
+          if found:
+              print(f"::error title=Game data in the wheel::{', '.join(found)}")
+              sys.exit(1)
+          CHECK
+        shell: bash
