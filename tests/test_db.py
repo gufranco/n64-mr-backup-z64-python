@@ -203,19 +203,17 @@ class TestLookupByCodeAlone:
         assert found.cic == "6102"
 
 
+def cached_catalogue() -> db.Database:
+    """The downloaded catalogue, or skip. Never returns without one."""
+    try:
+        return db.load_default()
+    except db.DatabaseMissingError:
+        pytest.skip("catalogue not cached")
+
+
 class TestTheRealCatalogueCoversTheCollection:
     def test_it_knows_a_flashram_game(self):
-        try:
-            catalogue = db.load_default()
-        except db.DatabaseMissingError:
-            pytest.skip("catalogue not cached")
-
-        assert catalogue.lookup_by_code("NZSE").save == "flash128k"
+        assert cached_catalogue().lookup_by_code("NZSE").save == "flash128k"
 
     def test_it_knows_an_eeprom_game(self):
-        try:
-            catalogue = db.load_default()
-        except db.DatabaseMissingError:
-            pytest.skip("catalogue not cached")
-
-        assert catalogue.lookup_by_code("NSME").save == "eeprom512"
+        assert cached_catalogue().lookup_by_code("NSME").save == "eeprom512"

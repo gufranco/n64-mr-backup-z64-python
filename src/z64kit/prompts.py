@@ -31,9 +31,11 @@ class Cancelled(KeyboardInterrupt):
 
 
 class Console(Protocol):
-    def say(self, text: str = "") -> None: ...
+    def say(self, text: str = "") -> None:
+        """Show a line to the person."""
 
-    def ask(self, prompt: str) -> str: ...
+    def ask(self, prompt: str) -> str:
+        """Show a prompt and return what they typed."""
 
 
 def _read(console: Console, prompt: str) -> str:

@@ -208,34 +208,6 @@ def step_pick_action(console: prompts.Console) -> str:
     return ACTION_FOLDERS if picked == 0 else ACTION_IMAGES
 
 
-def _default_runner(action: str, source: Path, output: Path, patches: str | None) -> int:
-    """Hand the work to the same commands the command line uses."""
-    import argparse
-
-    from . import cli
-
-    args = argparse.Namespace(
-        source=str(source),
-        output=str(output),
-        force=False,
-        patches=patches,
-        json=False,
-        no_pdf=False,
-        inventory=str(Path(output) / "cartridges.json"),
-        file=str(Path(output) / "cartridges.json"),
-        own=[],
-        show=False,
-        ask=True,
-    )
-    if action == ACTION_FOLDERS:
-        return cli.cmd_organise(args)
-    if action == ACTION_IMAGES:
-        return cli.cmd_build(args)
-    if action == ACTION_REPORT:
-        return cli.cmd_report(args)
-    return cli.cmd_inventory(args)
-
-
 def run(
     console: prompts.Console,
     *,
@@ -243,10 +215,15 @@ def run(
     supplied: Path | None = None,
     home: Path | None = None,
     cwd: Path | None = None,
-    runner: Callable[[str, Path, Path, str | None], int] | None = None,
+    runner: Callable[[str, Path, Path, str | None], int],
 ) -> int:
-    """Walk the whole flow. Returns 0 only when something was actually produced."""
-    act = runner or _default_runner
+    """Walk the whole flow. Returns 0 only when something was actually produced.
+
+    The step that writes is passed in rather than imported. This module drives the
+    questions and the command line owns the commands, so having the flow reach back
+    for them would make the two import each other.
+    """
+    act = runner
     supplied_folder = supplied or Path(artifacts.FOLDER_NAME)
 
     console.say("This puts your Nintendo 64 games onto Zip disks for a Mr. Backup Z64.")

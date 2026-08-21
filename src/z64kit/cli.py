@@ -887,6 +887,35 @@ def cmd_merge(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_step(action: str, source: Path, output: Path, patches: str | None) -> int:
+    """Perform one step of the guided flow with the same commands the CLI exposes.
+
+    The flow asks the questions and this answers them, which keeps the dependency
+    pointing one way: the command line knows about the wizard, and the wizard knows
+    only that something will take an action and return a status.
+    """
+    args = argparse.Namespace(
+        source=str(source),
+        output=str(output),
+        force=False,
+        patches=patches,
+        json=False,
+        no_pdf=False,
+        inventory=str(Path(output) / "cartridges.json"),
+        file=str(Path(output) / "cartridges.json"),
+        own=[],
+        show=False,
+        ask=True,
+    )
+    if action == wizard.ACTION_FOLDERS:
+        return cmd_organise(args)
+    if action == wizard.ACTION_IMAGES:
+        return cmd_build(args)
+    if action == wizard.ACTION_REPORT:
+        return cmd_report(args)
+    return cmd_inventory(args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="z64kit", description=__doc__)
     subparsers = parser.add_subparsers(dest="command")
@@ -1007,7 +1036,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):
         if argv is None or not argv:
-            return wizard.run(ConsoleIO())
+            return wizard.run(ConsoleIO(), runner=_run_step)
         parser.print_usage()
         return 2
     try:

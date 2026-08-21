@@ -395,65 +395,6 @@ class TestDescribePlan:
         assert wizard._describe_plan(console, tmp_path) >= 2
 
 
-class TestDefaultRunner:
-    def test_folders_dispatch_to_organise(self, tmp_path, monkeypatch):
-        from z64kit import cli
-
-        seen = []
-        monkeypatch.setattr(cli, "cmd_organise", lambda args: seen.append(("organise", args)) or 0)
-
-        code = wizard._default_runner(
-            wizard.ACTION_FOLDERS, tmp_path, tmp_path / "out", str(tmp_path)
-        )
-
-        assert code == 0
-        assert seen[0][0] == "organise"
-
-    def test_images_dispatch_to_build(self, tmp_path, monkeypatch):
-        from z64kit import cli
-
-        seen = []
-        monkeypatch.setattr(cli, "cmd_build", lambda args: seen.append(("build", args)) or 0)
-
-        code = wizard._default_runner(
-            wizard.ACTION_IMAGES, tmp_path, tmp_path / "out", str(tmp_path)
-        )
-
-        assert code == 0
-        assert seen[0][0] == "build"
-
-    def test_the_source_and_output_reach_the_command(self, tmp_path, monkeypatch):
-        from z64kit import cli
-
-        seen = []
-        monkeypatch.setattr(cli, "cmd_organise", lambda args: seen.append(args) or 0)
-
-        wizard._default_runner(wizard.ACTION_FOLDERS, tmp_path, tmp_path / "out", str(tmp_path))
-
-        assert seen[0].source == str(tmp_path)
-        assert seen[0].output == str(tmp_path / "out")
-
-    def test_it_never_forces_an_overwrite(self, tmp_path, monkeypatch):
-        from z64kit import cli
-
-        seen = []
-        monkeypatch.setattr(cli, "cmd_organise", lambda args: seen.append(args) or 0)
-
-        wizard._default_runner(wizard.ACTION_FOLDERS, tmp_path, tmp_path / "out", str(tmp_path))
-
-        assert seen[0].force is False
-
-    def test_the_patch_folder_reaches_the_command(self, tmp_path, monkeypatch):
-        from z64kit import cli
-
-        seen = []
-        monkeypatch.setattr(cli, "cmd_build", lambda args: seen.append(args) or 0)
-
-        wizard._default_runner(wizard.ACTION_IMAGES, tmp_path, tmp_path / "o", "patchdir")
-
-        assert seen[0].patches == "patchdir"
-
-
 class TestFollowUpOffers:
     def setup_flow(self, tmp_path, monkeypatch, extra_answers):
         monkeypatch.setattr(wizard, "_inspect", lambda folder: (15, 15, [], [], []))
@@ -533,44 +474,6 @@ class TestFollowUpOffers:
         code = wizard.run(console, source=tmp_path, runner=runner, supplied=tmp_path)
 
         assert code == 0
-
-
-class TestRunnerHandlesEveryAction:
-    def test_report_dispatches_to_the_report_command(self, tmp_path, monkeypatch):
-        from z64kit import cli
-
-        seen = []
-        monkeypatch.setattr(cli, "cmd_report", lambda args: seen.append(args) or 0)
-
-        code = wizard._default_runner(
-            wizard.ACTION_REPORT, tmp_path, tmp_path / "out", str(tmp_path)
-        )
-
-        assert code == 0
-        assert seen[0].source == str(tmp_path)
-
-    def test_inventory_dispatches_to_the_inventory_command(self, tmp_path, monkeypatch):
-        from z64kit import cli
-
-        seen = []
-        monkeypatch.setattr(cli, "cmd_inventory", lambda args: seen.append(args) or 0)
-
-        code = wizard._default_runner(
-            wizard.ACTION_INVENTORY, tmp_path, tmp_path / "out", str(tmp_path)
-        )
-
-        assert code == 0
-        assert seen[0].ask is True
-
-    def test_the_inventory_answers_are_stored_beside_the_output(self, tmp_path, monkeypatch):
-        from z64kit import cli
-
-        seen = []
-        monkeypatch.setattr(cli, "cmd_inventory", lambda args: seen.append(args) or 0)
-
-        wizard._default_runner(wizard.ACTION_INVENTORY, tmp_path, tmp_path / "out", str(tmp_path))
-
-        assert str(tmp_path / "out") in seen[0].file
 
 
 class TestCandidateSubfolders:

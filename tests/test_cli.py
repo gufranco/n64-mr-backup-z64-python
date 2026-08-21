@@ -754,8 +754,6 @@ class TestArtifactsCommand:
         assert str(target) in capsys.readouterr().out
 
     def test_emits_machine_readable_output_on_request(self, tmp_path, capsys):
-        import json
-
         from z64kit import cli
 
         cli.main(["artifacts", "--folder", str(tmp_path), "--json"])
@@ -827,8 +825,6 @@ class TestArtifactsCommandReporting:
         assert "present and verified" in capsys.readouterr().out
 
     def test_json_output_reports_completeness(self, tmp_path, capsys):
-        import json as jsonlib
-
         from z64kit import artifacts, cli
 
         manifest = artifacts.load_default_manifest()
@@ -841,7 +837,7 @@ class TestArtifactsCommandReporting:
         code = cli.main(["artifacts", "--folder", str(tmp_path), "--json"])
 
         assert code == 0
-        assert jsonlib.loads(capsys.readouterr().out)["complete"] is True
+        assert json.loads(capsys.readouterr().out)["complete"] is True
 
 
 class TestDoctorChecksTheArtifactFolder:
@@ -1439,3 +1435,85 @@ class TestCandidatesCarryTheirSaveType:
         assert cli.cmd_inventory(args) == 0
 
         assert "16 Kbit EEPROM" in capsys.readouterr().out
+
+
+class TestTheGuidedFlowStep:
+    """The wizard asks; this performs. Moved here when the two stopped importing
+    each other, because the commands it dispatches to live in this module."""
+
+    def test_folders_dispatch_to_organise(self, tmp_path, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = []
+        monkeypatch.setattr(cli, "cmd_organise", lambda args: seen.append(args) or 0)
+
+        code = cli._run_step(wizard.ACTION_FOLDERS, tmp_path, tmp_path / "out", str(tmp_path))
+
+        assert code == 0
+        assert seen[0].source == str(tmp_path)
+
+    def test_images_dispatch_to_build(self, tmp_path, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = []
+        monkeypatch.setattr(cli, "cmd_build", lambda args: seen.append(args) or 0)
+
+        assert cli._run_step(wizard.ACTION_IMAGES, tmp_path, tmp_path / "out", None) == 0
+        assert seen
+
+    def test_report_dispatches_to_report(self, tmp_path, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = []
+        monkeypatch.setattr(cli, "cmd_report", lambda args: seen.append(args) or 0)
+
+        assert cli._run_step(wizard.ACTION_REPORT, tmp_path, tmp_path / "out", None) == 0
+        assert seen[0].no_pdf is False
+
+    def test_inventory_dispatches_to_inventory_and_asks(self, tmp_path, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = []
+        monkeypatch.setattr(cli, "cmd_inventory", lambda args: seen.append(args) or 0)
+
+        assert cli._run_step(wizard.ACTION_INVENTORY, tmp_path, tmp_path / "out", None) == 0
+        assert seen[0].ask is True
+
+    def test_it_never_forces_an_overwrite(self, tmp_path, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = []
+        monkeypatch.setattr(cli, "cmd_organise", lambda args: seen.append(args) or 0)
+
+        cli._run_step(wizard.ACTION_FOLDERS, tmp_path, tmp_path / "out", None)
+
+        assert seen[0].force is False
+
+    def test_the_patch_folder_reaches_the_command(self, tmp_path, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = []
+        monkeypatch.setattr(cli, "cmd_build", lambda args: seen.append(args) or 0)
+
+        cli._run_step(wizard.ACTION_IMAGES, tmp_path, tmp_path / "o", "patchdir")
+
+        assert seen[0].patches == "patchdir"
+
+    def test_the_inventory_answers_are_stored_beside_the_output(self, tmp_path, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = []
+        monkeypatch.setattr(cli, "cmd_inventory", lambda args: seen.append(args) or 0)
+
+        cli._run_step(wizard.ACTION_INVENTORY, tmp_path, tmp_path / "out", None)
+
+        assert str(tmp_path / "out") in seen[0].file
+
+    def test_no_arguments_supplies_the_runner_to_the_flow(self, monkeypatch):
+        from z64kit import cli, wizard
+
+        seen = {}
+        monkeypatch.setattr(wizard, "run", lambda console, **kw: seen.update(kw) or 0)
+
+        assert cli.main([]) == 0
+        assert seen["runner"] is cli._run_step
