@@ -23,6 +23,25 @@ def text() -> str:
     return SCRIPT.read_text(encoding="utf-8")
 
 
+def resolved_byte_count(text: str, value: str) -> int:
+    """The number behind a `bs=` argument, whether written inline or held in a
+    variable. Asserting on the variable's name instead would test the spelling
+    rather than the size."""
+    if not value.startswith("$"):
+        assert value.isdigit(), f"bs={value} is not a byte count"
+        return int(value)
+
+    name = value.strip("${}")
+    assigned = re.search(rf"^{name}=(\d+)$", text, re.M)
+
+    assert assigned, f"bs={value} but {name} is not assigned a plain number"
+    return int(assigned.group(1))
+
+
+def block_sizes_in(text: str, region: str) -> list[int]:
+    return [resolved_byte_count(text, v) for v in re.findall(r"bs=\"?(\$?\{?\w+\}?)\"?", region)]
+
+
 class TestPortability:
     def test_no_block_size_uses_a_suffix_only_bsd_accepts(self, text):
         """GNU dd rejects a lowercase suffix. A plain byte count suits both."""
@@ -30,9 +49,11 @@ class TestPortability:
 
         assert offenders == []
 
-    def test_every_block_size_is_a_plain_number(self, text):
-        for value in re.findall(r"bs=(\S+)", text):
-            assert value.isdigit(), f"bs={value} is not a plain byte count"
+    def test_every_block_size_is_a_byte_count(self, text):
+        """Either a literal number, or a variable holding one."""
+        sizes = block_sizes_in(text, text)
+
+        assert sizes
 
     def test_it_does_not_rely_on_a_bsd_only_stat_format(self, text):
         assert "stat -f" not in text
@@ -103,3 +124,45 @@ class TestVerification:
     def test_it_reads_the_disk_back_and_compares(self, text):
         assert "shasum" in text
         assert "WANT" in text and "GOT" in text
+
+
+class TestItDoesNotLeaveTheDiskExposed:
+    """macOS mounts a freshly written disk read-write and indexes it.
+
+    On the disk written during development that cost 988 KB of Spotlight index
+    plus an FSEvents log, added two directories the unit never asked for, and
+    broke byte-identity with the image. Ejecting when the write is done is what
+    stops it: an unmounted disk cannot be indexed.
+    """
+
+    def test_it_ejects_when_it_is_finished(self, text):
+        assert "diskutil eject" in text
+
+    def test_it_ejects_after_reading_the_disk_back(self, text):
+        assert text.index("GOT=") < text.index("diskutil eject")
+
+    def test_it_ejects_whether_or_not_the_comparison_matches(self, text):
+        """A failed verify used to leave the disk mounted, which is when macOS
+        indexes it, which is the worst moment to leave it exposed."""
+        assert text.index("diskutil eject") < text.index('if [ "$WANT" = "$GOT" ]')
+
+    def test_it_says_the_disk_was_ejected(self, text):
+        assert "ejected" in text.lower()
+
+
+class TestVerificationIsNotPainfullySlow:
+    """Reading back 96 MiB in 512-byte requests is 196,608 round trips to a USB
+    Zip drive. It looked like a hang during development, because at that request
+    size it very nearly is one."""
+
+    def test_the_read_back_uses_a_large_block_size(self, text):
+        sizes = block_sizes_in(text, text[text.index("GOT=") :])
+
+        assert sizes, "the read-back passes no block size to dd"
+        assert min(sizes) >= 1 << 20
+
+    def test_it_still_compares_exactly_the_payload_bytes(self, text):
+        """A large block size overshoots, so the tail has to be trimmed."""
+        read_back = text[text.index("GOT=") :]
+
+        assert "head -c" in read_back

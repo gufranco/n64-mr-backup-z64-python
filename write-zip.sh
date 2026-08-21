@@ -95,21 +95,22 @@ fi
 sudo -v
 diskutil unmountDisk force "$DEV" >/dev/null
 
+BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD=1048576
+BLOCKS=$(( (BYTES + BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD - 1) / BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD ))
+
 START=$(date +%s)
-# A plain byte count rather than a suffix: BSD dd reads 1m, GNU dd rejects
-# it and wants 1M, and a machine with coreutils ahead of the system tools
-# gets the GNU one. The number suits both.
-sudo dd if="$TMP" of="$RAW" bs=1048576 2>&1 | tail -1
+sudo dd if="$TMP" of="$RAW" bs="$BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD" 2>&1 | tail -1
 sync
 END=$(date +%s)
 
 WANT="$(shasum -a 256 < "$TMP" | awk '{print $1}')"
-GOT="$(sudo dd if="$RAW" bs=512 count="$SECTORS" 2>/dev/null | shasum -a 256 | awk '{print $1}')"
+GOT="$(sudo dd if="$RAW" bs="$BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD" count="$BLOCKS" 2>/dev/null | head -c "$BYTES" | shasum -a 256 | awk '{print $1}')"
+
+sudo diskutil eject "$DEV" >/dev/null 2>&1 && echo "ejected     $DEV, safe to remove"
 
 if [ "$WANT" = "$GOT" ]; then
     echo "verify      OK, sha256 $WANT"
     echo "elapsed     $((END - START))s"
-    sudo diskutil eject "$DEV" >/dev/null && echo "ejected     $DEV, safe to remove"
 else
     echo "verify      FAILED" >&2
     echo "  expected  $WANT" >&2
