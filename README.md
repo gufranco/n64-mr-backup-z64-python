@@ -5,10 +5,10 @@
 <br>
 <br>
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE.txt)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-879-brightgreen?style=flat-square)](tests)
-[![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen?style=flat-square)](pyproject.toml)
+[![CI](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml)
+[![Analysis](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/analysis.yml/badge.svg)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/analysis.yml)
+[![Scorecard](https://api.scorecard.dev/projects/github.com/gufranco/n64-mr-backup-z64-python/badge)](https://scorecard.dev/viewer/?uri=github.com/gufranco/n64-mr-backup-z64-python)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE.txt)
 
 </div>
 
@@ -21,7 +21,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**11** commands · **24** modules · **879** tests · **97%** coverage · **zero** runtime dependencies · **byte-reproducible** images
+**11** commands · **zero** runtime dependencies · **byte-reproducible** images · coverage gated at **95%** · types checked **strict**
 
 ```console
 $ z64kit doctor
@@ -301,7 +301,7 @@ patches/          # where you put the files you supply. Generated README, no pay
 
 | Suite | Command | Covers |
 |:------|:--------|:-------|
-| Everything | `pytest` | 879 tests, coverage gate at 95% |
+| Everything | `pytest` | The whole suite, with the coverage gate at 95% |
 | Skip the ones needing game data | `pytest -m "not artifacts"` | Explicit form of what happens anyway when no collection is present |
 | Only the ones needing game data | `pytest -m artifacts` | Byte-for-byte image reproduction. Skips unless `Z64KIT_LIBRARY` and `Z64KIT_GOLDEN` resolve |
 | Lint and format | `ruff check src tests && ruff format --check src tests` | Style and static analysis |

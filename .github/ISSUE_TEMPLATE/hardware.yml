@@ -1,0 +1,32 @@
+name: A result from real hardware
+description: You ran something this project produced on an actual Mr. Backup Z64.
+labels: [hardware]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most valuable kind of report this project can receive. Nothing
+        here has been verified on the unit, so a result either way settles a
+        question that no amount of testing on a computer can.
+
+  - type: input
+    id: bios
+    attributes:
+      label: Which BIOS the unit is running
+      placeholder: 2.18, or 2.20 CF edition
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What you did and what the unit did
+      description: Which command produced the disk, and what happened when you loaded it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: game
+    attributes:
+      label: Which game, and its checksums if you have them
+      description: The CRC1 and CRC2 pair from `z64kit scan` identifies the exact dump.
