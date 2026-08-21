@@ -42,7 +42,7 @@ from . import (
     wizard,
 )
 from .fat import image, payload, writer
-from .report import catalogue, hardware, latex, render
+from .report import catalogue, hardware, latex, render, tiers
 from .rom import header
 
 
@@ -536,7 +536,8 @@ def cmd_report(args: argparse.Namespace) -> int:
     rows = catalogue.rows_from(layout, saves, rules, patched)
 
     generated = _today()
-    document = catalogue.build(rows, rules=rules, held=held, generated=generated)
+    bands = tiers.load(Path(args.source))
+    document = catalogue.build(rows, rules=rules, held=held, generated=generated, bands=bands)
     result = render.write(document, out_dir / "catalogue", compile_pdf=not args.no_pdf)
     print(result.message)
 

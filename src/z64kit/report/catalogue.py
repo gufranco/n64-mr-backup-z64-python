@@ -17,7 +17,7 @@ from pathlib import Path
 from ..compat import Candidate, Rules, classify, requirement_for
 from ..inventory import Inventory
 from ..scan import Game
-from . import latex
+from . import latex, tiers
 
 STATUS_LABEL = {
     "native": "saves",
@@ -177,7 +177,14 @@ def _video_sections(rows: list[Row]) -> list[str]:
     return body
 
 
-def build(rows: list[Row], *, rules: Rules, held: Inventory, generated: str) -> str:
+def build(
+    rows: list[Row],
+    *,
+    rules: Rules,
+    held: Inventory,
+    generated: str,
+    bands: tuple[tiers.Band, ...] = (),
+) -> str:
     body: list[str] = [latex.section("Summary"), _summary(rows, generated)]
 
     if not held.is_recorded:
@@ -217,7 +224,21 @@ def build(rows: list[Row], *, rules: Rules, held: Inventory, generated: str) -> 
     body.extend(_video_sections(rows))
 
     body.append(latex.section("Disk contents"))
+    if bands:
+        body.append(
+            latex.note(
+                "Disks are filled best first, so the bands below are where the collection "
+                "says one level of quality ends and the next begins. The ranking is the "
+                "reader's own; nothing here judges a game."
+            )
+        )
+    standing: str | None = None
     for disk in sorted({r.disk for r in rows}):
+        number = tiers.disk_number(disk)
+        band = tiers.band_for(number, bands) if number is not None else None
+        if band is not None and band.name != standing:
+            body.append(latex.section(band.heading))
+            standing = band.name
         on_disk = [r for r in rows if r.disk == disk]
         used = sum(r.mib for r in on_disk)
         body.append(
