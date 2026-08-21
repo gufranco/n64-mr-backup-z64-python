@@ -6,6 +6,8 @@ Windows path arrives with backslashes, Enter means "the obvious thing", and a ty
 must re-ask instead of crashing or silently doing the wrong thing.
 """
 
+from pathlib import Path
+
 import pytest
 
 from z64kit import prompts
@@ -140,10 +142,20 @@ class TestCleanPath:
     def test_a_bare_separator_is_kept(self):
         assert prompts.clean_path("/") == "/"
 
-    def test_a_home_shortcut_is_expanded(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("HOME", str(tmp_path))
+    def test_a_home_shortcut_is_expanded(self):
+        """Expansion is the platform's, so the expected value has to be too.
 
-        assert prompts.clean_path("~/roms") == f"{tmp_path}/roms"
+        Windows resolves ~ from USERPROFILE rather than HOME, so pinning one of
+        them and predicting a POSIX separator asserts the test's idea of a home
+        directory instead of the platform's.
+        """
+        expanded = prompts.clean_path("~/roms")
+
+        assert expanded == str(Path.home() / "roms")
+        assert "~" not in expanded
+
+    def test_a_bare_home_shortcut_is_expanded(self):
+        assert prompts.clean_path("~") == str(Path.home())
 
     def test_an_empty_string_stays_empty(self):
         assert prompts.clean_path("   ") == ""
