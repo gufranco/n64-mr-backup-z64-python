@@ -30,6 +30,7 @@ from pathlib import Path
 from . import (
     aps,
     artifacts,
+    burn,
     compat,
     db,
     inventory,
@@ -862,6 +863,70 @@ def cmd_payload(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_write(args: argparse.Namespace) -> int:
+    """Write one image to a physical disk, watching the drive as it goes."""
+    source = Path(args.image)
+    if not source.is_file():
+        print(f"no such image: {source}")
+        return 1
+
+    try:
+        device = burn.read_device(args.device)
+    except burn.DeviceError as error:
+        print(str(error))
+        return 1
+
+    refused = burn.refusals(device, image.TOTAL_SECTORS * image.SECTOR)
+    if refused:
+        print(f"REFUSING TO WRITE to {args.device}:")
+        for reason in refused:
+            print(f"  {reason}")
+        return 1
+
+    serial = args.serial if args.serial is not None else secrets.randbits(32)
+    try:
+        made = payload.prepare(source.read_bytes(), serial=serial)
+    except (OSError, payload.ImageRejectedError) as error:
+        print(f"{source} cannot be written: {error}")
+        return 1
+
+    if made.highest_cluster < payload.FIRST_DATA_CLUSTER and not args.empty:
+        print(f"{source} holds no files, so writing it would leave a blank disk.")
+        print("Pass --empty if that is what you want.")
+        return 1
+
+    print(f"target      {device.block}  {device.media}")
+    print(f"image       {source}")
+    print(f"payload     {made.sectors} sectors, {made.size} bytes")
+    print(f"serial      {made.serial:08X} (fresh for this disk)")
+
+    if not args.yes:
+        answer = input(f"Write to {device.block} and destroy its contents? type YES: ")
+        if answer.strip() != "YES":
+            print("aborted")
+            return 1
+
+    scratch = Path(args.output or "") if args.output else None
+    holder = scratch or Path(f"{source}.payload")
+    try:
+        holder.write_bytes(made.body)
+        written = burn.write_image(holder, device, total_bytes=made.size, say=print)
+    except burn.WriteFailedError as error:
+        print("")
+        print(f"STOPPED: {error}")
+        print("  The disk was ejected. A drive that clicks can damage the next disk")
+        print("  it is given, and a disk that caused it can damage the next drive.")
+        return 1
+    finally:
+        holder.unlink(missing_ok=True)
+
+    print(f"verify      OK, {written.chunks} chunks matched")
+    print(f"elapsed     {written.seconds}s")
+    if written.ejected:
+        print(f"ejected     {device.block}, safe to remove")
+    return 0
+
+
 def cmd_db_update(_args: argparse.Namespace) -> int:
     """Fetch the save-type catalogue. This is the only command that uses the network."""
     try:
@@ -945,6 +1010,17 @@ def _run_step(action: str, source: Path, output: Path, patches: str | None) -> i
         show=False,
         ask=True,
     )
+    if action == wizard.ACTION_WRITE:
+        return cmd_write(
+            argparse.Namespace(
+                image=str(source),
+                device=patches or "",
+                yes=False,
+                empty=False,
+                output=None,
+                serial=None,
+            )
+        )
     if action == wizard.ACTION_FOLDERS:
         return cmd_organise(args)
     if action == wizard.ACTION_IMAGES:
@@ -1057,6 +1133,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--write-readme", action="store_true", help="regenerate the folder's documentation"
     )
     art.set_defaults(func=cmd_artifacts)
+
+    wr = subparsers.add_parser("write", help="write one image to a Zip disk, verifying as it goes")
+    wr.add_argument("image")
+    wr.add_argument("device", help="the device node, for example disk8")
+    wr.add_argument("-y", "--yes", action="store_true", help="skip the confirmation")
+    wr.add_argument("--empty", action="store_true", help="allow an image holding no files")
+    wr.add_argument("--output", default=None, help="where to stage the payload")
+    wr.add_argument(
+        "--serial",
+        type=lambda given: int(given, 16),
+        default=None,
+        help="hex volume serial, default a fresh random one per disk",
+    )
+    wr.set_defaults(func=cmd_write)
 
     pay = subparsers.add_parser(
         "payload", help="write the used prefix of an image, stamped for one disk"

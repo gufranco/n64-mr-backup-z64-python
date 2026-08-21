@@ -28,6 +28,7 @@ ACTION_FOLDERS = "folders"
 ACTION_IMAGES = "images"
 ACTION_REPORT = "report"
 ACTION_INVENTORY = "inventory"
+ACTION_WRITE = "write"
 
 GAME_SUFFIXES = (".z64", ".v64", ".n64", ".rom")
 LIKELY_FOLDERS = (
@@ -208,6 +209,61 @@ def step_pick_action(console: prompts.Console) -> str:
     return ACTION_FOLDERS if picked == 0 else ACTION_IMAGES
 
 
+def built_images(destination: Path) -> list[Path]:
+    try:
+        return sorted(p for p in destination.iterdir() if p.suffix.lower() == ".img")
+    except OSError:
+        return []
+
+
+def step_offer_to_write(
+    console: prompts.Console,
+    destination: Path,
+    act: Callable[[str, Path, Path, str | None], int],
+) -> int:
+    """Offer to put the images onto disks, one at a time, stopping on any fault.
+
+    Each disk is a separate physical act: swap the media, confirm, write. Doing
+    them in a loop without asking between would mean a fault on disk 3 is found
+    after disks 4 through 48 have already gone through the same drive.
+    """
+    images = built_images(destination)
+    if not images:
+        return 0
+
+    console.say()
+    if not prompts.confirm(
+        console, f"Write these {len(images)} image(s) to Zip disks now?", default=False
+    ):
+        return 0
+
+    console.say()
+    console.say("  Each disk is written, read back through the raw device and compared.")
+    console.say("  The disk is never mounted, so nothing is added to it.")
+    console.say("  A failed or stalling transfer stops everything and ejects at once.")
+
+    written = 0
+    for image_path in images:
+        console.say()
+        console.say(f"  {image_path.name}")
+        if not prompts.confirm(console, "    Insert a disk and write this one?", default=True):
+            console.say("    skipped")
+            continue
+        device = console.ask("    Which device? (for example disk8): ").strip()
+        if not device:
+            console.say("    skipped")
+            continue
+        if act(ACTION_WRITE, image_path, destination, device) != 0:
+            console.say()
+            console.say("    Stopped. Nothing further was written.")
+            return 1
+        written += 1
+
+    console.say()
+    console.say(f"  {written} of {len(images)} written.")
+    return 0
+
+
 def run(
     console: prompts.Console,
     *,
@@ -288,6 +344,9 @@ def run(
     console.say("Done.")
 
     try:
+        if action == ACTION_IMAGES:
+            step_offer_to_write(console, destination, act)
+
         wants_catalogue = prompts.confirm(
             console, "Write a printable catalogue to keep with the disks?", default=True
         )
@@ -305,7 +364,7 @@ def run(
     console.say()
     console.say("What to do next:")
     if action == ACTION_IMAGES:
-        console.say("  Write an image to a Zip disk, one image per disk.")
+        console.say("  Write any image you skipped with: z64kit write <image> <diskN>")
     else:
         console.say("  Copy the contents of each folder onto its own Zip disk.")
     console.say(f"  Everything produced is in {destination}.")

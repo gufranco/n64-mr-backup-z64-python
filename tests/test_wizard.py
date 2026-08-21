@@ -563,3 +563,94 @@ class TestMissingSuppliedFolderDoesNotCrash:
         wizard.run(console, source=tmp_path, runner=explode, supplied=tmp_path)
 
         assert "did not finish" in console.output.lower()
+
+
+def images_in(folder, count):
+    for number in range(1, count + 1):
+        (folder / f"Zip_Disk_{number:02d}.img").write_bytes(b"")
+    return folder
+
+
+class TestOfferingToWriteTheDisks:
+    """Each disk is a separate physical act: swap the media, confirm, write. A
+    fault on one has to stop the rest, because every later disk would otherwise
+    go through the same drive before anyone saw it."""
+
+    def test_it_offers_nothing_when_no_images_were_built(self, tmp_path):
+        recorder = Recorder()
+
+        wizard.step_offer_to_write(Scripted([]), tmp_path, recorder)
+
+        assert recorder.calls == []
+
+    def test_declining_writes_nothing(self, tmp_path):
+        recorder = Recorder()
+
+        wizard.step_offer_to_write(Scripted(["n"]), images_in(tmp_path, 2), recorder)
+
+        assert recorder.calls == []
+
+    def test_it_defaults_to_not_writing(self, tmp_path):
+        """Erasing a disk is not the safe default for a bare Enter."""
+        recorder = Recorder()
+
+        wizard.step_offer_to_write(Scripted([""]), images_in(tmp_path, 1), recorder)
+
+        assert recorder.calls == []
+
+    def test_accepting_writes_each_image(self, tmp_path):
+        recorder = Recorder()
+
+        wizard.step_offer_to_write(
+            Scripted(["y", "y", "disk8", "y", "disk8"]), images_in(tmp_path, 2), recorder
+        )
+
+        assert len(recorder.calls) == 2
+
+    def test_the_device_reaches_the_writer(self, tmp_path):
+        recorder = Recorder()
+
+        wizard.step_offer_to_write(Scripted(["y", "y", "disk8"]), images_in(tmp_path, 1), recorder)
+
+        assert recorder.calls[0][3] == "disk8"
+
+    def test_it_asks_before_each_disk(self, tmp_path):
+        recorder = Recorder()
+
+        wizard.step_offer_to_write(
+            Scripted(["y", "n", "y", "disk9"]), images_in(tmp_path, 2), recorder
+        )
+
+        assert len(recorder.calls) == 1
+        assert recorder.calls[0][3] == "disk9"
+
+    def test_an_empty_device_skips_rather_than_guessing(self, tmp_path):
+        recorder = Recorder()
+
+        wizard.step_offer_to_write(Scripted(["y", "y", "", "n"]), images_in(tmp_path, 2), recorder)
+
+        assert recorder.calls == []
+
+    def test_a_fault_stops_the_remaining_disks(self, tmp_path):
+        recorder = Recorder(code=1)
+
+        code = wizard.step_offer_to_write(
+            Scripted(["y", "y", "disk8", "y", "disk8"]), images_in(tmp_path, 3), recorder
+        )
+
+        assert code == 1
+        assert len(recorder.calls) == 1
+
+    def test_it_says_the_disk_is_never_mounted(self, tmp_path):
+        console = Scripted(["y", "n"])
+
+        wizard.step_offer_to_write(console, images_in(tmp_path, 1), Recorder())
+
+        assert "never mounted" in "\n".join(console.written)
+
+    def test_it_says_a_stall_stops_everything(self, tmp_path):
+        console = Scripted(["y", "n"])
+
+        wizard.step_offer_to_write(console, images_in(tmp_path, 1), Recorder())
+
+        assert "ejects" in "\n".join(console.written)
