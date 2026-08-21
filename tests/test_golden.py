@@ -50,7 +50,7 @@ def build_disk(folder, label):
     from z64kit import naming
 
     assigned, _, _ = naming.assign([(p.name, p.name) for p in roms])
-    volume = writer.Volume(label=label)
+    volume = writer.Volume()
     for path in roms:
         volume.add_file(writer.ROOT, assigned[path.name], "Z64", path.read_bytes())
     volume.sort_directories()

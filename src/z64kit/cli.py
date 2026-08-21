@@ -317,7 +317,7 @@ def cmd_build(args: argparse.Namespace) -> int:
 
     disks = []
     for name, games in layout:
-        volume = writer.Volume(label=name.upper()[:11])
+        volume = writer.Volume()
         placed = []
         for game in sorted(games, key=lambda g: (-g.size, g.filename)):
             base = names[game.filename]

@@ -16,8 +16,11 @@ usage: write-zip.sh <diskN> [LABEL] [-y] [--full]
   LABEL     optional FAT volume label, up to 11 characters.
   -y        skip the confirmation prompt.
   --full    write all 96 MB instead of only the filesystem metadata.
-  --fixed-serial  keep the image's volume serial instead of randomizing it,
-                  so the written disk is byte-identical to the master.
+
+  Every disk gets a fresh volume serial. An image carries none, so without one
+  every disk would look identical to real mode DOS, which uses the serial to
+  notice that the media changed. Two disks sharing one can make it serve a cached
+  FAT from the previous disk after a swap, which reads as corruption.
 
   IMG=other.img write-zip.sh disk8    use a different master image.
 USAGE
@@ -28,7 +31,6 @@ for arg in "$@"; do
     case "$arg" in
         -y) ASSUME_YES=1 ;;
         --full) FULL=1 ;;
-        --fixed-serial) export Z64_FIXED_SERIAL=1 ;;
         -h|--help) usage ;;
         disk*) DISK="$arg" ;;
         *) LABEL="$arg" ;;
@@ -81,11 +83,7 @@ SERIAL="$(printf '%s\n' "$PREP" | awk -F= '/^SERIAL=/{print $2}')"
 HIGH="$(printf '%s\n' "$PREP" | awk -F= '/^HIGHEST_CLUSTER=/{print $2}')"
 
 echo "payload     $SECTORS sectors, $BYTES bytes (highest used cluster $HIGH)"
-if [ "${Z64_FIXED_SERIAL:-0}" = "1" ]; then
-    echo "serial      $SERIAL (kept from image, disk is byte-identical to master)"
-else
-    echo "serial      $SERIAL (freshly randomized for this disk)"
-fi
+echo "serial      $SERIAL (fresh for this disk, the image carries none)"
 [ -n "$LABEL" ] && echo "label       $LABEL"
 
 if [ "$ASSUME_YES" != "1" ]; then

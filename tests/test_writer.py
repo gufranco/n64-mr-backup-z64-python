@@ -12,7 +12,7 @@ def payload(size, seed=0xAB):
 
 @pytest.fixture
 def volume():
-    return writer.Volume(label="Z64")
+    return writer.Volume()
 
 
 class TestNames:
@@ -104,7 +104,7 @@ class TestDirectories:
         assert entries[1].cluster == 0
 
     def test_the_root_directory_has_a_finite_capacity(self, volume):
-        for index in range(image.ROOT_ENTRIES - 1):
+        for index in range(image.ROOT_ENTRIES):
             volume.add_file(writer.ROOT, f"F{index:07d}"[:8], "B", b"")
 
         with pytest.raises(writer.DirectoryFullError):
@@ -189,12 +189,14 @@ class TestSorting:
 
         assert listed == ["ALPHA", "MIKE", "ZEBRA"]
 
-    def test_the_volume_label_stays_first(self, volume):
+    def test_the_first_slot_holds_a_file_rather_than_a_label(self, volume):
         volume.add_file(writer.ROOT, "AAAA", "BIN", b"")
 
         volume.sort_directories()
 
-        assert volume.list_dir(writer.ROOT)[0].is_label
+        first = volume.list_dir(writer.ROOT)[0]
+        assert not first.is_label
+        assert first.name.startswith(b"AAAA")
 
     def test_directories_sort_before_files(self, volume):
         volume.add_file(writer.ROOT, "AAAA", "BIN", b"")
@@ -233,8 +235,9 @@ class TestTimestamps:
 
         raw = volume.to_bytes()
         root = raw[image.root_lba() * image.SECTOR :]
-        entry = root[32:64]
+        entry = root[0:32]
 
+        assert entry[0:11] == b"TEST    BIN"
         assert struct.unpack_from("<H", entry, 22)[0] == image.TZ_TIME
         assert struct.unpack_from("<H", entry, 24)[0] == image.TZ_DATE
 
@@ -242,7 +245,7 @@ class TestTimestamps:
 class TestDeterminism:
     def test_the_same_content_produces_the_same_bytes(self):
         def build():
-            vol = writer.Volume(label="Z64")
+            vol = writer.Volume()
             vol.add_file(writer.ROOT, "ONE", "BIN", payload(5000))
             vol.add_file(writer.ROOT, "TWO", "BIN", payload(9000, seed=3))
             vol.sort_directories()
@@ -251,7 +254,7 @@ class TestDeterminism:
         assert hashlib.sha256(build()).hexdigest() == hashlib.sha256(build()).hexdigest()
 
     def test_an_untouched_volume_equals_a_blank_image(self, volume):
-        assert volume.to_bytes() == image.blank_image(label="Z64")
+        assert volume.to_bytes() == image.blank_image()
 
 
 class TestVerification:
@@ -276,7 +279,7 @@ class TestEveryTimestampFieldCarriesTheFixedStamp:
     """
 
     def entry_for(self, name="GAME", extension="Z64"):
-        volume = writer.Volume(label="TEST")
+        volume = writer.Volume()
         volume.add_file(writer.ROOT, name, extension, b"\x00" * 4096)
         raw = volume.to_bytes()
         at = raw.find(f"{name:<8}{extension}".encode())
@@ -305,7 +308,7 @@ class TestEveryTimestampFieldCarriesTheFixedStamp:
         assert self.field(self.entry_for(), 0x0D, size=1) == 0
 
     def test_a_subdirectory_entry_carries_the_stamp_too(self):
-        volume = writer.Volume(label="TEST")
+        volume = writer.Volume()
         volume.make_dir(writer.ROOT, "SUB")
         raw = volume.to_bytes()
         at = raw.find(b"SUB     ")

@@ -2,12 +2,12 @@ import struct
 
 import pytest
 
-from z64kit.fat import image
+from z64kit.fat import image, writer
 
 
 @pytest.fixture(scope="module")
 def blank():
-    return image.blank_image(label="Z64")
+    return image.blank_image()
 
 
 class TestGeometry:
@@ -49,7 +49,7 @@ class TestBlankImage:
         assert len(blank) == 100_663_296
 
     def test_is_reproducible(self):
-        assert image.blank_image(label="Z64") == image.blank_image(label="Z64")
+        assert image.blank_image() == image.blank_image()
 
     def test_only_the_metadata_region_is_non_zero(self, blank):
         tail = blank[image.metadata_extent_sectors() * image.SECTOR :]
@@ -135,11 +135,11 @@ class TestBootSector:
 
         assert struct.unpack_from("<I", boot, 39)[0] == 0
 
-    def test_an_explicit_serial_is_honoured(self):
-        data = image.blank_image(label="Z64", volume_serial=0xDEADBEEF)
-        boot = data[image.PART_START_LBA * image.SECTOR :]
+    def test_no_caller_can_set_a_serial(self):
+        """Identity belongs to a physical disk, stamped when one is written."""
+        import inspect
 
-        assert struct.unpack_from("<I", boot, 39)[0] == 0xDEADBEEF
+        assert inspect.signature(image.blank_image).parameters == {}
 
 
 class TestClusterCount:
@@ -153,31 +153,23 @@ class TestClusterCount:
 
 
 class TestVolumeLabel:
-    def test_the_label_appears_in_the_boot_sector(self):
-        data = image.blank_image(label="MYDISK")
-        boot = data[image.PART_START_LBA * image.SECTOR :]
+    def test_the_boot_sector_carries_no_name(self):
+        boot = image.blank_image()[image.PART_START_LBA * image.SECTOR :]
 
-        assert boot[43:54] == b"MYDISK     "
+        assert boot[43:54] == image.NO_LABEL
 
-    def test_the_label_also_occupies_the_first_root_entry(self):
-        data = image.blank_image(label="MYDISK")
-        root = data[image.root_lba() * image.SECTOR :]
+    def test_no_caller_can_set_one(self):
+        import inspect
 
-        assert root[0:11] == b"MYDISK     "
-        assert root[11] == 0x08
+        assert inspect.signature(image.boot_sector).parameters == {}
+        assert inspect.signature(image.empty_root).parameters == {}
 
-    def test_the_label_is_truncated_rather_than_overflowing(self):
-        data = image.blank_image(label="A VERY LONG NAME")
-        boot = data[image.PART_START_LBA * image.SECTOR :]
+    def test_the_root_directory_is_entirely_empty(self):
+        """With no label there is no entry at all, so every slot reads as free."""
+        data = image.blank_image()
+        root = data[image.root_lba() * image.SECTOR :][: image.root_sectors() * image.SECTOR]
 
-        assert boot[43:54] == b"A VERY LONG"
-
-    def test_every_timestamp_is_the_fixed_torrentzip_constant(self):
-        data = image.blank_image(label="Z64")
-        root = data[image.root_lba() * image.SECTOR :]
-
-        assert struct.unpack_from("<H", root, 22)[0] == image.TZ_TIME
-        assert struct.unpack_from("<H", root, 24)[0] == image.TZ_DATE
+        assert set(root) == {0}
 
     def test_that_constant_decodes_to_the_expected_moment(self):
         year = 1980 + (image.TZ_DATE >> 9)
@@ -202,3 +194,65 @@ class TestFatTables:
         table = blank[start + 4 : start + image.SECTORS_PER_FAT * image.SECTOR]
 
         assert table.count(0) == len(table)
+
+
+class TestNoVolumeLabel:
+    """Images carry no volume label at all.
+
+    A label is a name, and a name is a thing that differs between disks for no
+    benefit the unit uses. Leaving it out makes every blank volume byte-identical
+    and frees the first root slot for a file.
+
+    An empty string is not the same as absent: passing one used to write eleven
+    spaces into a directory entry, which is a label whose name happens to be
+    blank. Nothing here writes that entry at all.
+    """
+
+    def root_at(self, raw: bytes) -> int:
+        return (
+            image.PART_START_LBA + image.RESERVED_SECTORS + image.NUM_FATS * image.SECTORS_PER_FAT
+        ) * image.SECTOR
+
+    def test_the_boot_record_carries_no_label(self):
+        raw = image.blank_image()
+
+        vbr = raw[image.PART_START_LBA * image.SECTOR :][:512]
+
+        assert vbr[43:54] == b" " * 11
+
+    def test_the_root_directory_starts_empty(self):
+        raw = image.blank_image()
+
+        assert raw[self.root_at(raw)] == 0x00
+
+    def test_no_entry_anywhere_claims_to_be_a_label(self):
+        raw = image.blank_image()
+        root = self.root_at(raw)
+
+        for slot in range(image.ROOT_ENTRIES):
+            entry = raw[root + slot * 32 : root + (slot + 1) * 32]
+            assert not entry[11] & image.ATTR_VOLUME_LABEL
+
+    def test_every_blank_volume_is_byte_identical(self):
+        assert image.blank_image() == image.blank_image()
+
+    def test_the_serial_is_zero(self):
+        vbr = image.blank_image()[image.PART_START_LBA * image.SECTOR :][:512]
+
+        assert struct.unpack("<I", vbr[39:43])[0] == image.NO_SERIAL
+
+    def test_two_volumes_holding_the_same_files_are_the_same_bytes(self):
+        one, two = writer.Volume(), writer.Volume()
+        for volume in (one, two):
+            volume.add_file(writer.ROOT, "GAME", "Z64", b"\x01" * 4096)
+
+        assert one.to_bytes() == two.to_bytes()
+
+    def test_the_first_root_slot_is_available_to_a_file(self):
+        volume = writer.Volume()
+        volume.add_file(writer.ROOT, "GAME", "Z64", b"\x00" * 4096)
+
+        raw = volume.to_bytes()
+        first = raw[self.root_at(raw) : self.root_at(raw) + 11]
+
+        assert first == b"GAME    Z64"

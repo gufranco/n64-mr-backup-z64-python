@@ -14,6 +14,21 @@ Everything here is deterministic. The volume serial is zero and every timestamp
 is the fixed TorrentZip constant, so two builds of the same content produce
 identical bytes. A serial is written per physical disk at flashing time instead,
 because real mode DOS uses it to notice a media change.
+
+An image carries no identity at all: no volume label, in the boot record or as a
+directory entry, and a volume serial of zero. Two images holding the same files
+are therefore the same bytes, not merely reproducible from the same input, and the
+first root slot is free for a file rather than spent on a name.
+
+Identity belongs to the physical disk instead, and is stamped when one is written.
+Real mode DOS uses the serial to notice that the media changed, so two disks
+sharing one can make it serve a cached FAT from the previous disk after a swap,
+which reads as corruption. That is a property of a disk in a drive, not of a file
+on a workstation, so nothing here can or should decide it.
+
+Note that an empty label is not the same as no label: it writes an entry whose
+name is eleven spaces, which is a label that happens to look blank. Nothing here
+writes that entry at all.
 """
 
 from __future__ import annotations
@@ -148,11 +163,11 @@ def master_boot_record() -> bytes:
     return bytes(sector)
 
 
-def _label_bytes(label: str) -> bytes:
-    return label.upper().ljust(11)[:11].encode("ascii", "replace")
+NO_LABEL = b" " * 11
+NO_SERIAL = 0
 
 
-def boot_sector(label: str, volume_serial: int = 0) -> bytes:
+def boot_sector() -> bytes:
     sector = bytearray(SECTOR)
     sector[0:3] = bytes([0xEB, 0x3C, 0x90])
     sector[3:11] = OEM_NAME
@@ -170,8 +185,8 @@ def boot_sector(label: str, volume_serial: int = 0) -> bytes:
     struct.pack_into("<I", sector, 32, partition_sectors())
     sector[36] = DRIVE_NUMBER
     sector[38] = 0x29
-    struct.pack_into("<I", sector, 39, volume_serial)
-    sector[43:54] = _label_bytes(label)
+    struct.pack_into("<I", sector, 39, NO_SERIAL)
+    sector[43:54] = NO_LABEL
     sector[54:62] = b"FAT16   "
     stub = _message_stub(STUB_TEXT, 0x3E)
     sector[0x3E : 0x3E + len(stub)] = stub
@@ -185,26 +200,19 @@ def empty_fat() -> bytes:
     return bytes(table)
 
 
-def empty_root(label: str) -> bytes:
-    root = bytearray(root_sectors() * SECTOR)
-    root[0:11] = _label_bytes(label)
-    root[11] = ATTR_VOLUME_LABEL
-    struct.pack_into("<H", root, 14, TZ_TIME)
-    struct.pack_into("<H", root, 16, TZ_DATE)
-    struct.pack_into("<H", root, 18, TZ_DATE)
-    struct.pack_into("<H", root, 22, TZ_TIME)
-    struct.pack_into("<H", root, 24, TZ_DATE)
-    return bytes(root)
+def empty_root() -> bytes:
+    """An empty root directory. No label entry, so slot zero is free for a file."""
+    return bytes(root_sectors() * SECTOR)
 
 
-def blank_image(label: str, volume_serial: int = 0) -> bytes:
+def blank_image() -> bytes:
     parts = [
         master_boot_record(),
         bytes(SECTOR * (PART_START_LBA - 1)),
-        boot_sector(label, volume_serial),
+        boot_sector(),
         empty_fat(),
         empty_fat(),
-        empty_root(label),
+        empty_root(),
     ]
     built = b"".join(parts)
     return built + bytes(TOTAL_SECTORS * SECTOR - len(built))

@@ -93,8 +93,8 @@ def display_name(stored: bytes) -> str:
 
 
 class Volume:
-    def __init__(self, label: str = "Z64", volume_serial: int = 0) -> None:
-        self._data = bytearray(image.blank_image(label, volume_serial))
+    def __init__(self) -> None:
+        self._data = bytearray(image.blank_image())
         self._dir_buffers: dict[int, bytearray] = {}
         self._sources: dict[tuple[int, bytes], bytes] = {}
 

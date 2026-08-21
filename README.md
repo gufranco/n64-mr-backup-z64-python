@@ -69,8 +69,8 @@ human recognises rather than `LZELDOOT`. Verified against 1,414 real names.
 <td width="50%" valign="top">
 
 ### Byte-reproducible images
-No timestamps, no volume serial drift, no filesystem noise. The same input produces the same
-SHA-256 on any machine, so an image can be verified rather than trusted.
+No timestamps, no volume label, no serial, no filesystem noise. Two images holding the same
+files are the same bytes, so an image can be verified rather than trusted.
 
 </td>
 <td width="50%" valign="top">
