@@ -96,7 +96,10 @@ sudo -v
 diskutil unmountDisk force "$DEV" >/dev/null
 
 START=$(date +%s)
-sudo dd if="$TMP" of="$RAW" bs=1m 2>&1 | tail -1
+# A plain byte count rather than a suffix: BSD dd reads 1m, GNU dd rejects
+# it and wants 1M, and a machine with coreutils ahead of the system tools
+# gets the GNU one. The number suits both.
+sudo dd if="$TMP" of="$RAW" bs=1048576 2>&1 | tail -1
 sync
 END=$(date +%s)
 
