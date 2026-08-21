@@ -32,10 +32,17 @@ def resolved_byte_count(text: str, value: str) -> int:
         return int(value)
 
     name = value.strip("${}")
-    assigned = re.search(rf"^{name}=(\d+)$", text, re.M)
+    literal = re.search(rf"^{name}=(\d+)$", text, re.M)
+    if literal:
+        return int(literal.group(1))
 
-    assert assigned, f"bs={value} but {name} is not assigned a plain number"
-    return int(assigned.group(1))
+    computed = re.search(rf"^{name}=\$\(\(([\d\s*]+)\)\)$", text, re.M)
+
+    assert computed, f"bs={value} but {name} is not assigned a byte count"
+    product = 1
+    for factor in computed.group(1).split("*"):
+        product *= int(factor.strip())
+    return product
 
 
 def block_sizes_in(text: str, region: str) -> list[int]:
@@ -159,7 +166,7 @@ class TestItDependsOnlyOnTrackedCode:
 class TestVerification:
     def test_it_reads_the_disk_back_and_compares(self, text):
         assert "shasum" in text
-        assert "WANT" in text and "GOT" in text
+        assert "written" in text and "read_back" in text
 
 
 class TestItDoesNotLeaveTheDiskExposed:
@@ -175,12 +182,14 @@ class TestItDoesNotLeaveTheDiskExposed:
         assert "diskutil eject" in text
 
     def test_it_ejects_after_reading_the_disk_back(self, text):
-        assert text.index("GOT=") < text.index("diskutil eject")
+        assert text.index('echo "verifying') < text.rindex("diskutil eject")
 
     def test_it_ejects_whether_or_not_the_comparison_matches(self, text):
         """A failed verify used to leave the disk mounted, which is when macOS
-        indexes it, which is the worst moment to leave it exposed."""
-        assert text.index("diskutil eject") < text.index('if [ "$WANT" = "$GOT" ]')
+        indexes it, which is the worst moment to leave it exposed. Now every
+        failure path ejects and so does the success path."""
+        assert "eject_now" in text[text.index("fault() {") :]
+        assert "diskutil eject" in text[text.index('echo "verifying') :]
 
     def test_it_says_the_disk_was_ejected(self, text):
         assert "ejected" in text.lower()
@@ -192,16 +201,19 @@ class TestVerificationIsNotPainfullySlow:
     size it very nearly is one."""
 
     def test_the_read_back_uses_a_large_block_size(self, text):
-        sizes = block_sizes_in(text, text[text.index("GOT=") :])
+        sizes = block_sizes_in(text, text[text.index('echo "verifying') :])
 
         assert sizes, "the read-back passes no block size to dd"
         assert min(sizes) >= 1 << 20
 
     def test_it_still_compares_exactly_the_payload_bytes(self, text):
-        """A large block size overshoots, so the tail has to be trimmed."""
-        read_back = text[text.index("GOT=") :]
+        """The last chunk is partial, so reading a whole block off the disk and
+        comparing it against a short one would fail on every healthy write."""
+        read_back = text[text.index('echo "verifying') :]
 
         assert "head -c" in read_back
+        assert "remaining" in read_back
+        assert "this_chunk" in read_back
 
 
 class TestItRefusesAnEmptyImage:
@@ -232,3 +244,93 @@ class TestItRefusesAnEmptyImage:
 
     def test_the_guard_runs_before_anything_is_written(self, text):
         assert text.index('HIGH" -lt 2') < text.index("sudo dd")
+
+
+class TestItStopsOnASickDrive:
+    """A Zip drive that cannot find a track re-seeks over and over. That is the
+    click, and it can wreck the disk, then the drive, then every disk put in the
+    drive afterwards. The clicking is not visible from software; an I/O error and
+    a collapse in throughput are, and both are what it does to the bus.
+    """
+
+    def test_it_transfers_in_chunks_so_a_stall_is_visible(self, text):
+        """One dd for the whole disk gives one timing and one exit code, which
+        cannot say where or when a drive stopped keeping up."""
+        assert "CHUNK_BYTES" in text
+        assert "CHUNKS" in text
+
+    def test_a_failed_write_stops_the_run(self, text):
+        write = text[text.index('echo "writing') :]
+
+        assert "fault " in write[: write.index("watch_for_stall")]
+
+    def test_a_failed_read_stops_the_run(self, text):
+        read = text[text.index('echo "verifying') :]
+
+        assert "fault " in read[: read.index("watch_for_stall")]
+
+    def test_a_chunk_over_the_ceiling_stops_the_run(self, text):
+        assert "STALL_SECONDS" in text
+        assert '-gt "$STALL_SECONDS"' in text
+
+    def test_a_chunk_far_slower_than_the_others_stops_the_run(self, text):
+        assert "SLOW_FACTOR" in text
+        assert "FASTEST * SLOW_FACTOR" in text
+
+    def test_both_thresholds_can_be_overridden(self, text):
+        assert "${STALL_SECONDS:-" in text
+        assert "${SLOW_FACTOR:-" in text
+
+    def test_every_fault_ejects_before_exiting(self, text):
+        body = text[text.index("fault() {") : text.index("watch_for_stall() {")]
+
+        assert "eject_now" in body
+        assert body.index("eject_now") < body.index("exit 1")
+
+    def test_it_warns_that_the_drive_itself_may_be_the_problem(self, text):
+        assert "damage the next disk" in text
+
+    def test_the_baseline_ignores_the_first_chunks(self, text):
+        """Spin-up makes the first chunks unrepresentative, so a comparison
+        against them would fire on a healthy drive."""
+        assert '"$index" -gt 2' in text
+
+
+class TestTheDiskIsNeverMounted:
+    """Mounting is how Spotlight and FSEvents ended up on a disk meant for a
+    console, so both directions go through the raw device."""
+
+    def test_it_writes_to_the_raw_device(self, text):
+        assert 'of="$RAW"' in text
+
+    def test_it_reads_back_from_the_raw_device(self, text):
+        assert 'if="$RAW"' in text
+
+    def test_it_unmounts_before_writing(self, text):
+        assert text.index("unmountDisk force") < text.index('of="$RAW"')
+
+    def test_it_unmounts_again_before_reading_back(self, text):
+        """macOS notices the new filesystem and mounts it the moment the write
+        finishes, which is inside the window the read-back runs in."""
+        write_done = text.index('echo "verifying')
+        before_read = text[:write_done]
+
+        assert before_read.count("unmountDisk force") >= 2
+
+    def test_it_never_mounts_the_disk(self, text):
+        assert "diskutil mount" not in text
+
+
+class TestEveryChunkIsCompared:
+    def test_it_compares_each_chunk_rather_than_only_the_whole(self, text):
+        """A whole-disk hash says a disk is wrong. A per-chunk one says where."""
+        read = text[text.index('echo "verifying') :]
+
+        assert "written" in read
+        assert "read_back" in read
+
+    def test_a_mismatch_stops_the_run(self, text):
+        assert "came back different from what was written" in text
+
+    def test_the_read_back_scratch_file_is_cleaned_up(self, text):
+        assert 'rm -f "$TMP" "$TMP.back"' in text

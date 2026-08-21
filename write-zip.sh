@@ -26,6 +26,22 @@ usage: write-zip.sh <diskN> [-y] [--full] [--empty]
   previous disk after a swap, which reads as corruption. There is no label
   option, by design.
 
+  The disk is never mounted. It is written and read back through the raw
+  device, so macOS never puts Spotlight or FSEvents data on it.
+
+  Every chunk is timed on the way out and on the way back. A failed transfer,
+  or one that collapses in speed, stops the run and ejects at once. That is as
+  close to catching a click of death as software gets: the clicking itself is
+  not visible here, but an I/O error and a sudden loss of throughput are, and
+  both are what it does to the bus. Continuing past either risks the disk, the
+  drive, and every disk put in that drive afterwards.
+
+  Each chunk is also compared against what was written, so a disk that accepts
+  bytes and returns different ones is caught at the chunk that failed.
+
+  STALL_SECONDS=60 write-zip.sh disk8  per-chunk ceiling before stopping.
+  SLOW_FACTOR=6 write-zip.sh disk8     stop when a chunk is this much slower
+                                       than the fastest one so far.
   IMG=other.img write-zip.sh disk8    use a different master image.
   Z64KIT=z64kit write-zip.sh disk8    use an installed z64kit rather than the
                                       module in this checkout.
@@ -83,7 +99,7 @@ echo "size        $SIZE bytes, external, removable"
 echo "image       $IMG"
 
 TMP="$(mktemp "${TMPDIR:-/tmp}/z64payload.XXXXXX")"
-trap 'rm -f "$TMP"' EXIT
+trap 'rm -f "$TMP" "$TMP.back"' EXIT
 
 PREP="$($Z64KIT payload "$IMG" "$TMP")" || {
   echo "$PREP" >&2
@@ -125,25 +141,90 @@ fi
 sudo -v
 diskutil unmountDisk force "$DEV" >/dev/null
 
-BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD=1048576
-BLOCKS=$(((BYTES + BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD - 1) / BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD))
+CHUNK_BYTES=$((8 * 1024 * 1024))
+CHUNKS=$(((BYTES + CHUNK_BYTES - 1) / CHUNK_BYTES))
+STALL_SECONDS="${STALL_SECONDS:-60}"
+SLOW_FACTOR="${SLOW_FACTOR:-6}"
+FASTEST=0
 
+eject_now() {
+  sync
+  sudo diskutil eject "$DEV" >/dev/null 2>&1 && echo "  ejected $DEV" >&2
+}
+
+fault() {
+  echo "" >&2
+  echo "STOPPED: $1" >&2
+  echo "  Ejecting immediately rather than continuing." >&2
+  eject_now
+  echo "" >&2
+  echo "  A drive that clicks can damage the next disk it is given, and a disk" >&2
+  echo "  that caused it can damage the next drive. Try neither again until you" >&2
+  echo "  have tested each against something you are willing to lose." >&2
+  exit 1
+}
+
+watch_for_stall() {
+  local what="$1" index="$2" took="$3"
+  if [ "$took" -gt "$STALL_SECONDS" ]; then
+    fault "$what chunk $index of $CHUNKS took ${took}s, over the ${STALL_SECONDS}s limit.
+  A transfer that slows this far has stopped making progress, which is what a
+  head re-seeking on a bad track looks like from here."
+  fi
+  if [ "$FASTEST" -gt 0 ] && [ "$index" -gt 2 ] &&
+    [ "$took" -gt $((FASTEST * SLOW_FACTOR)) ]; then
+    fault "$what chunk $index of $CHUNKS took ${took}s against a best of ${FASTEST}s.
+  Throughput collapsed by more than ${SLOW_FACTOR}x on the same drive and disk."
+  fi
+  if [ "$took" -gt 0 ] && { [ "$FASTEST" -eq 0 ] || [ "$took" -lt "$FASTEST" ]; }; then
+    FASTEST="$took"
+  fi
+}
+
+echo "writing     $CHUNKS chunks of $((CHUNK_BYTES / 1024 / 1024)) MiB, watching for stalls"
 START=$(date +%s)
-sudo dd if="$TMP" of="$RAW" bs="$BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD" 2>&1 | tail -1
+index=0
+while [ "$index" -lt "$CHUNKS" ]; do
+  chunk_started=$(date +%s)
+  if ! sudo dd if="$TMP" of="$RAW" bs="$CHUNK_BYTES" skip="$index" seek="$index" \
+    count=1 conv=notrunc 2>/dev/null; then
+    fault "the write failed on chunk $index of $CHUNKS.
+  An I/O error at this level means the drive could not complete the transfer."
+  fi
+  watch_for_stall "write" "$index" $(($(date +%s) - chunk_started))
+  index=$((index + 1))
+done
 sync
 END=$(date +%s)
 
-WANT="$(shasum -a 256 <"$TMP" | awk '{print $1}')"
-GOT="$(sudo dd if="$RAW" bs="$BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD" count="$BLOCKS" 2>/dev/null | head -c "$BYTES" | shasum -a 256 | awk '{print $1}')"
+diskutil unmountDisk force "$DEV" >/dev/null 2>&1 || true
+
+echo "verifying   reading back through $RAW, never mounted"
+FASTEST=0
+index=0
+while [ "$index" -lt "$CHUNKS" ]; do
+  remaining=$((BYTES - index * CHUNK_BYTES))
+  this_chunk=$((remaining < CHUNK_BYTES ? remaining : CHUNK_BYTES))
+  chunk_started=$(date +%s)
+  if ! sudo dd if="$RAW" bs="$CHUNK_BYTES" skip="$index" count=1 2>/dev/null |
+    head -c "$this_chunk" >"$TMP.back"; then
+    fault "the read failed on chunk $index of $CHUNKS.
+  The bytes went down but will not come back, so the disk cannot be trusted."
+  fi
+  watch_for_stall "read" "$index" $(($(date +%s) - chunk_started))
+
+  written="$(sudo dd if="$TMP" bs="$CHUNK_BYTES" skip="$index" count=1 2>/dev/null |
+    shasum -a 256 | awk '{print $1}')"
+  read_back="$(shasum -a 256 <"$TMP.back" | awk '{print $1}')"
+  if [ "$written" != "$read_back" ]; then
+    fault "chunk $index of $CHUNKS came back different from what was written.
+  The write reported success, so the disk is not holding what it was given."
+  fi
+  index=$((index + 1))
+done
+rm -f "$TMP.back"
 
 sudo diskutil eject "$DEV" >/dev/null 2>&1 && echo "ejected     $DEV, safe to remove"
 
-if [ "$WANT" = "$GOT" ]; then
-  echo "verify      OK, sha256 $WANT"
-  echo "elapsed     $((END - START))s"
-else
-  echo "verify      FAILED" >&2
-  echo "  expected  $WANT" >&2
-  echo "  read back $GOT" >&2
-  exit 1
-fi
+echo "verify      OK, every chunk matched, sha256 $(shasum -a 256 <"$TMP" | awk '{print $1}')"
+echo "elapsed     $((END - START))s"
