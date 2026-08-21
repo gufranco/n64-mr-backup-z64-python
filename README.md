@@ -21,7 +21,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**12** commands · **zero** runtime dependencies · **963** tests · **byte-reproducible** images · coverage gated at **95%** · types checked **strict**
+**13** commands · **zero** runtime dependencies · **963** tests · **byte-reproducible** images · coverage gated at **95%** · types checked **strict**
 
 ```console
 $ z64kit doctor
@@ -276,6 +276,7 @@ z64kit merge game.z64 game.aps --no-aa --output merged.aps --apply
 | `merge` | Fold a video change into a patch the game already needs |
 | `artifacts` | Check the supplied-artifact folder against the manifest |
 | `payload` | Write the used prefix of an image, stamped with a serial for one disk |
+| `write` | Write an image to a Zip disk, verifying every chunk and watching the drive |
 | `db-update` | Download the save-type catalogue. The only command that uses the network |
 | `doctor` | Report what is installed, and check the supplied files against the manifest |
 | _no command_ | Run the guided flow: five questions, nothing written until you confirm |
