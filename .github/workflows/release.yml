@@ -75,7 +75,11 @@ jobs:
 
           held = json.loads(Path("sbom.json").read_text())
           named = sorted(one["name"] for one in held.get("components", ()))
-          allowed = {"pip", "n64-mr-backup-z64-python"}
+          # pip and setuptools are put there by venv itself rather than by this
+          # package, and which of them appears depends on the Python version:
+          # 3.11 seeds both, 3.12 seeds only pip. A third name means the package
+          # grew a real runtime dependency.
+          allowed = {"pip", "setuptools", "n64-mr-backup-z64-python"}
           extra = [one for one in named if one not in allowed]
           print(f"components: {', '.join(named) or 'none'}")
           if extra:
