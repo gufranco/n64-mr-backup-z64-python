@@ -19,52 +19,26 @@ def row(**over):
         "cic": "6102",
         "save": "eeprom512",
         "status": "native",
-        "flags": "",
     }
     base.update(over)
     return catalogue.Row(**base)
 
 
-class TestFlags:
-    def test_marks_a_patched_title(self, rules):
-        verdict = compat.classify(
-            compat.Candidate(key="k", title="t", save="eeprom2k", has_patch=True), rules
-        )
-        game = type("G", (), {"checksum_valid": True})()
+class TestStatusLabel:
+    """The old flag column carried six markers and five said what the rest of the
+    row already said. Only the companion save file had nowhere else to live."""
 
-        assert "P" in catalogue.flags_for(verdict, game, has_companion=False)
+    def test_a_plain_status_reads_as_itself(self):
+        assert catalogue.status_label("native", needs_file=False) == "saves"
 
-    def test_marks_a_title_that_cannot_save(self, rules):
-        verdict = compat.classify(compat.Candidate(key="k", title="t", save="flash128k"), rules)
-        game = type("G", (), {"checksum_valid": True})()
+    def test_a_companion_requirement_is_marked(self):
+        assert catalogue.NEEDS_FILE in catalogue.status_label("native", needs_file=True)
 
-        assert "!" in catalogue.flags_for(verdict, game, has_companion=False)
+    def test_the_status_survives_the_marker(self):
+        assert catalogue.status_label("patched", needs_file=True).startswith("patched")
 
-    def test_marks_a_title_too_large_to_load(self, rules):
-        verdict = compat.classify(
-            compat.Candidate(key="k", title="t", size=64 * 1024 * 1024), rules
-        )
-        game = type("G", (), {"checksum_valid": True})()
-
-        assert "X" in catalogue.flags_for(verdict, game, has_companion=False)
-
-    def test_marks_a_companion_requirement(self, rules):
-        verdict = compat.classify(compat.Candidate(key="k", title="t"), rules)
-        game = type("G", (), {"checksum_valid": True})()
-
-        assert "+" in catalogue.flags_for(verdict, game, has_companion=True)
-
-    def test_marks_an_unverified_dump(self, rules):
-        verdict = compat.classify(compat.Candidate(key="k", title="t"), rules)
-        game = type("G", (), {"checksum_valid": False})()
-
-        assert "?" in catalogue.flags_for(verdict, game, has_companion=False)
-
-    def test_a_clean_native_title_carries_no_flags(self, rules):
-        verdict = compat.classify(compat.Candidate(key="k", title="t", save="eeprom512"), rules)
-        game = type("G", (), {"checksum_valid": True})()
-
-        assert catalogue.flags_for(verdict, game, has_companion=False) == ""
+    def test_an_unknown_status_is_printed_rather_than_dropped(self):
+        assert catalogue.status_label("something-new", needs_file=False) == "something-new"
 
 
 class TestBuild:
@@ -111,11 +85,12 @@ class TestBuild:
 
         assert "Cannot save without hardware" in out
 
-    def test_explains_every_flag_it_uses(self, rules):
-        out = catalogue.build([row()], rules=rules, held=inventory.Inventory(), generated="today")
+    def test_it_counts_games_needing_a_companion_file(self, rules):
+        rows = [row(needs_file=True), row(title="Other")]
 
-        for flag, _ in catalogue.FLAG_LEGEND:
-            assert flag in out
+        out = catalogue.build(rows, rules=rules, held=inventory.Inventory(), generated="today")
+
+        assert "Needs a companion save file" in out
 
     def test_reports_the_boot_chip_action_for_a_non_default_chip(self, rules):
         out = catalogue.build(
@@ -150,7 +125,6 @@ class TestPerGameRequirements:
                 cic="6102",
                 save="EEPROM 16Kb",
                 status="needs-donor",
-                flags="!",
                 requirement=requirement,
             )
         ]
@@ -194,7 +168,6 @@ class TestPerGameRequirements:
                 cic="6102",
                 save="EEPROM 4Kb",
                 status="native",
-                flags="",
                 requirement="",
             )
         ]
@@ -225,7 +198,6 @@ class TestPerGameRequirements:
             cic="6102",
             save="None",
             status="native",
-            flags="",
         )
 
         assert row.requirement == ""
@@ -272,7 +244,6 @@ def video_row(title="A Game", disk="Zip Disk 01", **video):
         cic="6102",
         save="none",
         status="native",
-        flags="",
         video=catalogue.Video(**video) if video or video == {} else None,
     )
 
@@ -323,15 +294,26 @@ class TestVideoSection:
 
         assert "Video" in out
 
-    def test_it_lists_a_game_with_a_patch_available(self):
+    def test_what_a_game_gives_up_is_in_its_own_disk_listing(self):
+        """The section carries counts only. A second per-game table would repeat
+        the Video column and add a page."""
         rows = [video_row(title="Super Mario 64", modes=10, antialiasing_on=6, dither_requests=1)]
 
         out = catalogue.build(
             rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
         )
 
-        assert "Games with a video patch available" in out
         assert "Super Mario 64" in out
+        assert "removes anti-aliasing and dedither" in out
+
+    def test_no_game_is_listed_twice(self):
+        rows = [video_row(title="Super Mario 64", modes=10, antialiasing_on=6, dither_requests=1)]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert out.count("Super Mario 64") == 1
 
     def test_it_explains_that_the_filter_is_the_main_blur(self):
         rows = [video_row(modes=8, antialiasing_on=6)]
@@ -342,7 +324,8 @@ class TestVideoSection:
 
         assert "dedither filter" in out
 
-    def test_a_refused_game_is_named_with_its_reason(self):
+    def test_a_refused_game_says_so_in_its_own_row(self):
+        """A separate refused list repeated the Video column on the same games."""
         rows = [
             video_row(title="Pokemon Stadium", modes=8, dither_requests=1, checksum_valid=False)
         ]
@@ -351,8 +334,17 @@ class TestVideoSection:
             rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
         )
 
-        assert "Video patches refused" in out
-        assert "Pokemon Stadium" in out
+        assert "refused, no boot chip" in out
+        assert out.count("Pokemon Stadium") == 1
+
+    def test_a_count_of_zero_is_left_out_rather_than_printed(self):
+        rows = [video_row(modes=8, antialiasing_on=6, dither_requests=1)]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert "Could not be read" not in out
 
     def test_the_disk_listing_carries_a_video_column(self):
         rows = [video_row(modes=8, antialiasing_on=6, dither_requests=1)]
@@ -373,7 +365,6 @@ class TestVideoSection:
                 cic="6102",
                 save="none",
                 status="native",
-                flags="",
             )
         ]
 
@@ -383,7 +374,7 @@ class TestVideoSection:
 
         assert catalogue.VIDEO_UNREAD in out
 
-    def test_no_video_section_when_nothing_was_read(self):
+    def test_the_counts_survive_when_nothing_was_read(self):
         rows = [
             catalogue.Row(
                 disk="Zip Disk 01",
@@ -392,7 +383,6 @@ class TestVideoSection:
                 cic="6102",
                 save="none",
                 status="native",
-                flags="",
             )
         ]
 
@@ -400,7 +390,7 @@ class TestVideoSection:
             rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
         )
 
-        assert "Games with a video patch available" not in out
+        assert "Video" not in out.split("Disk contents")[0].split("Flags")[0]
 
 
 class TestVideoFor:

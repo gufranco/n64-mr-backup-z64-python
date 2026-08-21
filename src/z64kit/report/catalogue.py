@@ -14,7 +14,7 @@ import collections
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..compat import Candidate, Rules, Verdict, classify, requirement_for
+from ..compat import Candidate, Rules, classify, requirement_for
 from ..inventory import Inventory
 from ..scan import Game
 from . import latex
@@ -28,14 +28,7 @@ STATUS_LABEL = {
     "too-large": "will not load",
 }
 
-FLAG_LEGEND = (
-    ("P", "a patch file sits beside it on the disk"),
-    ("B", "the BIOS carries a crack for it"),
-    ("!", "boots and plays but cannot save without a donor cartridge"),
-    ("X", "larger than the unit's memory, so it cannot load at all"),
-    ("+", "needs a companion save file to be present"),
-    ("?", "the dump's checksum matches no known boot chip"),
-)
+NEEDS_FILE = "+file"
 
 
 VIDEO_UNREAD = "not read"
@@ -94,26 +87,22 @@ class Row:
     cic: str
     save: str
     status: str
-    flags: str
+    needs_file: bool = False
     requirement: str = ""
     video: Video | None = None
 
 
-def flags_for(verdict: Verdict, game: Game, *, has_companion: bool) -> str:
-    out = ""
-    if verdict.status == "patched":
-        out += "P"
-    if verdict.status == "bios-crack":
-        out += "B"
-    if verdict.status == "needs-donor":
-        out += "!"
-    if verdict.status == "too-large":
-        out += "X"
-    if has_companion:
-        out += "+"
-    if not game.checksum_valid:
-        out += "?"
-    return out
+def status_label(status: str, *, needs_file: bool) -> str:
+    """What the Status column prints.
+
+    The old flag column carried six markers and only one of them said anything the
+    rest of the row did not. P, B, ! and X were computed straight from the status
+    beside them, and ? repeated the CIC column already reading "unknown". The
+    companion save file is the one fact with nowhere else to live, so it rides
+    here instead of paying for a column and a legend.
+    """
+    label = STATUS_LABEL.get(status, status)
+    return f"{label} {NEEDS_FILE}" if needs_file else label
 
 
 def _summary(rows: list[Row], generated: str) -> str:
@@ -128,8 +117,10 @@ def _summary(rows: list[Row], generated: str) -> str:
             ("Total size", f"{total_mib / 1024:.2f} GiB"),
             ("Saves unaided", str(counts.get("native", 0))),
             ("Saves via a patch", str(helped)),
+            ("Has no save data at all", str(counts.get("no-save-data", 0))),
             ("Cannot save without hardware", str(counts.get("needs-donor", 0))),
             ("Cannot load at all", str(counts.get("too-large", 0))),
+            ("Needs a companion save file", str(sum(1 for r in rows if r.needs_file))),
             ("Generated", generated),
         ]
     )
@@ -137,6 +128,10 @@ def _summary(rows: list[Row], generated: str) -> str:
 
 def _video_sections(rows: list[Row]) -> list[str]:
     """The video picture: what blurs, what can be cleared, and what cannot.
+
+    Counts only. What each individual game gives up sits in the Video column of
+    its own disk listing, so repeating it here as a second table would say the
+    same thing twice and add a page.
 
     Two settings, reported separately because they live in different places and
     fail for different reasons. Anti-aliasing is in the mode table, so a ROM with
@@ -156,85 +151,34 @@ def _video_sections(rows: list[Row]) -> list[str]:
     body = [latex.section("Video")]
     body.append(
         latex.note(
-            "The blur on real hardware is mostly the dedither filter, bit 16 of VI_CTRL, "
-            "not edge anti-aliasing. The filter never appears in a video mode table: a game "
-            "switches it on at runtime, so clearing it edits that routine instead. Anti-"
-            "aliasing does live in the table, which is why a ROM with no provable table can "
-            "have the filter cleared and not the anti-aliasing."
+            "The blur on real hardware is mostly the dedither filter, not edge anti-aliasing. "
+            "The two are set in different places, so a game can lose one and keep the other."
         )
     )
     body.append(
         latex.longtable(
             ["What", "Games"],
             [
-                ["Anti-aliasing can be removed", str(len(aa))],
-                ["Dedither filter can be removed", str(len(dither))],
-                [
-                    "Dedither filter already unreachable",
-                    str(len(known) - len(dither) - len(blocked)),
-                ],
-                ["Refused, checksum matches no known boot chip", str(len(blocked))],
-                ["Could not be read", str(len(unreadable))],
+                [what, str(count)]
+                for what, count in (
+                    ("Anti-aliasing can be removed", len(aa)),
+                    ("Dedither filter can be removed", len(dither)),
+                    ("Dedither filter already off", len(known) - len(dither) - len(blocked)),
+                    ("Refused, no known boot chip", len(blocked)),
+                    ("Could not be read", len(unreadable)),
+                )
+                if count
             ],
             widths=["100mm", "20mm"],
             align=["l", "r"],
         )
     )
 
-    changeable = sorted({r.title: r for r in aa + dither}.values(), key=lambda r: r.title)
-    if changeable:
-        body.append(latex.section("Games with a video patch available"))
-        body.append(
-            latex.longtable(
-                ["Game", "Modes", "AA on", "Divot", "Gamma dither", "What a patch removes"],
-                [
-                    [
-                        r.title,
-                        str(r.video.modes),
-                        str(r.video.antialiasing_on),
-                        str(r.video.divot_on),
-                        str(r.video.gamma_dither_on),
-                        r.video.summary,
-                    ]
-                    for r in changeable
-                    if r.video is not None
-                ],
-                widths=["54mm", "13mm", "12mm", "12mm", "21mm", "42mm"],
-                align=["l", "r", "r", "r", "r", "l"],
-            )
-        )
-
-    if blocked:
-        body.append(latex.section("Video patches refused"))
-        body.append(
-            latex.longtable(
-                ["Game", "Why"],
-                [
-                    [
-                        r.title,
-                        "the dump's checksum matches no known boot chip, so a patched "
-                        "copy could not be resealed and would not boot",
-                    ]
-                    for r in sorted(blocked, key=lambda x: x.title)
-                ],
-                widths=["55mm", "105mm"],
-            )
-        )
-
     return body
 
 
 def build(rows: list[Row], *, rules: Rules, held: Inventory, generated: str) -> str:
     body: list[str] = [latex.section("Summary"), _summary(rows, generated)]
-
-    body.append(latex.section("Flags"))
-    body.append(
-        latex.longtable(
-            ["Flag", "Meaning"],
-            [[flag, meaning] for flag, meaning in FLAG_LEGEND],
-            widths=["12mm", "150mm"],
-        )
-    )
 
     if not held.is_recorded:
         body.append(
@@ -245,17 +189,6 @@ def build(rows: list[Row], *, rules: Rules, held: Inventory, generated: str) -> 
                 "reader owns."
             )
         )
-
-    counts = collections.Counter(r.status for r in rows)
-    body.append(latex.section("Save capability"))
-    body.append(
-        latex.longtable(
-            ["Status", "Games"],
-            [[STATUS_LABEL.get(s, s), str(n)] for s, n in counts.most_common()],
-            widths=["60mm", "20mm"],
-            align=["l", "r"],
-        )
-    )
 
     body.append(latex.section("Boot chip"))
     body.append(
@@ -293,31 +226,29 @@ def build(rows: list[Row], *, rules: Rules, held: Inventory, generated: str) -> 
         )
         body.append(
             latex.longtable(
-                ["Game", "CIC", "Save", "Status", "Video", "Flags"],
+                ["Game", "CIC", "Save", "Status", "Video"],
                 [
                     [
                         r.title,
                         r.cic,
                         rules.save_label(r.save),
-                        STATUS_LABEL.get(r.status, r.status),
+                        status_label(r.status, needs_file=r.needs_file),
                         r.video.summary if r.video is not None else VIDEO_UNREAD,
-                        r.flags,
                     ]
                     for r in on_disk
                 ],
-                widths=["66mm", "12mm", "22mm", "18mm", "42mm", "8mm"],
-                align=["l", "l", "l", "l", "l", "l"],
+                widths=["68mm", "12mm", "22mm", "26mm", "42mm"],
+                align=["l", "l", "l", "l", "l"],
             )
         )
 
     body.append(latex.section("How these values were obtained"))
     body.append(
         latex.note(
-            "Every figure is read from the files themselves. The boot chip is recovered by "
-            "recomputing the header checksum against each known seed, so it is measured "
-            "rather than looked up. A patch is bound to a ROM by the first 64 bytes of its "
-            "target, which include both checksums, so a patch built for a different revision "
-            "is never applied. Source for the memory limit: " + rules.memory_source
+            "Every figure is read from the files themselves. The boot chip is measured by "
+            "recomputing the header checksum against each known seed rather than looked up, "
+            "and a patch is bound to a ROM by the first 64 bytes of its target, so one built "
+            "for another revision is never applied. Memory limit: " + rules.memory_source
         )
     )
 
@@ -380,7 +311,7 @@ def rows_from(
                     cic=game.cic,
                     save=candidate.save,
                     status=verdict.status,
-                    flags=flags_for(verdict, game, has_companion=game.filename in patched),
+                    needs_file=game.filename in patched,
                     requirement=requirement_for(verdict, rules),
                     video=video_for(game),
                 )
