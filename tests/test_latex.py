@@ -175,3 +175,49 @@ class TestKeyValue:
 
         assert r"A \& B" in out
         assert r"100\%" in out
+
+
+class TestATableMustFitThePage:
+    """LaTeX only warns about an overfull box, so a table running off the right
+    edge still produces a PDF and a zero exit code. A nine-column listing shipped
+    15.9mm past the margin that way."""
+
+    def test_it_refuses_columns_wider_than_the_page(self):
+        with pytest.raises(latex.TooWideError):
+            latex.longtable(["A", "B"], [["1", "2"]], widths=["120mm", "120mm"])
+
+    def test_it_says_how_far_past_the_margin(self):
+        with pytest.raises(latex.TooWideError, match="past the right margin"):
+            latex.longtable(["A", "B"], [["1", "2"]], widths=["120mm", "120mm"])
+
+    def test_it_names_the_widest_column_to_narrow(self):
+        with pytest.raises(latex.TooWideError, match="150mm"):
+            latex.longtable(["A", "B"], [["1", "2"]], widths=["150mm", "60mm"])
+
+    def test_it_accepts_a_table_that_fits(self):
+        out = latex.longtable(["A", "B"], [["1", "2"]], widths=["90mm", "90mm"])
+
+        assert "longtable" in out
+
+    def test_the_padding_between_columns_counts(self):
+        """Columns summing to exactly the text width still overflow, because
+        tabcolsep is added on both sides of every column."""
+        exact = f"{latex.TEXT_WIDTH_MM / 2}mm"
+
+        with pytest.raises(latex.TooWideError):
+            latex.longtable(["A", "B"], [["1", "2"]], widths=[exact, exact])
+
+    def test_a_single_column_has_no_padding_to_pay_for(self):
+        out = latex.longtable(["A"], [["1"]], widths=[f"{latex.TEXT_WIDTH_MM}mm"])
+
+        assert "longtable" in out
+
+    def test_it_measures_centimetres_too(self):
+        assert latex.table_width_mm(["2cm"]) == pytest.approx(20.0)
+
+    def test_it_measures_points(self):
+        assert latex.table_width_mm(["72.27pt"]) == pytest.approx(25.4, abs=0.01)
+
+    def test_it_refuses_a_unit_it_cannot_measure(self):
+        with pytest.raises(ValueError, match="unknown column width unit"):
+            latex.table_width_mm(["3ex"])

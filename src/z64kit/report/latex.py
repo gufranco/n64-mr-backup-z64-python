@@ -49,6 +49,50 @@ PREAMBLE = r"""\documentclass[9pt,a4paper]{extarticle}
 \renewcommand{\footrulewidth}{0.2pt}
 """
 
+PAGE_WIDTH_MM = 210.0
+MARGIN_MM = 12.0
+TEXT_WIDTH_MM = PAGE_WIDTH_MM - 2 * MARGIN_MM
+TABCOLSEP_PT = 3.0
+MM_PER_PT = 25.4 / 72.27
+
+
+class TooWideError(ValueError):
+    """A table whose columns cannot fit the page, caught before it is typeset.
+
+    LaTeX only warns about an overfull box, so a table that runs off the right
+    edge still produces a PDF and a zero exit code. That is how a nine-column
+    listing shipped 15.9mm past the margin. Refusing here turns a warning nobody
+    reads into a failure that stops the build.
+    """
+
+
+UNITS_IN_MM = {
+    "mm": 1.0,
+    "cm": 10.0,
+    "in": 25.4,
+    "pt": MM_PER_PT,
+    "bp": 25.4 / 72,
+}
+
+
+def _mm(width: str) -> float:
+    """A TeX length in millimetres, so widths in any unit can be compared."""
+    unit = width[-2:]
+    if unit not in UNITS_IN_MM:
+        raise ValueError(f"unknown column width unit in {width!r}")
+    return float(width[:-2]) * UNITS_IN_MM[unit]
+
+
+def table_width_mm(widths: Sequence[str]) -> float:
+    """What a table will actually occupy, columns plus the padding between them.
+
+    `\\tabcolsep` is added on both sides of every column, and the `@{}` at each
+    end of the spec removes it from the outer edges, which leaves 2n-2 gaps.
+    """
+    columns = sum(_mm(w) for w in widths)
+    gaps = max(0, 2 * len(widths) - 2)
+    return columns + gaps * TABCOLSEP_PT * MM_PER_PT
+
 
 def escape(text: object) -> str:
     out = []
@@ -79,6 +123,15 @@ def longtable(
     for row in rows:
         if len(row) != len(headers):
             raise ValueError(f"a row has {len(row)} cells but the table has {len(headers)} columns")
+
+    occupied = table_width_mm(widths)
+    if occupied > TEXT_WIDTH_MM:
+        raise TooWideError(
+            f"a {len(widths)}-column table needs {occupied:.1f}mm but the page gives "
+            f"{TEXT_WIDTH_MM:.1f}mm, so it would run {occupied - TEXT_WIDTH_MM:.1f}mm past "
+            f"the right margin. Narrow the columns, the first of which is "
+            f"{max(widths, key=_mm)}."
+        )
 
     alignment = list(align or ["l"] * len(headers))
     spec = []

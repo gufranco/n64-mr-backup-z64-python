@@ -69,7 +69,7 @@ class Video:
     @property
     def summary(self) -> str:
         if not self.checksum_valid:
-            return "checksum invalid, cannot reseal"
+            return "no boot chip"
         wanted = []
         if self.aa_patchable:
             wanted.append("AA")
@@ -78,8 +78,8 @@ class Video:
         if wanted:
             return ", ".join(wanted)
         if self.modes == 0 and self.dither_requests == 0:
-            return "no table, filter unreachable"
-        return "already clean"
+            return "unreachable"
+        return "clean"
 
 
 @dataclass(frozen=True)
@@ -307,15 +307,15 @@ def build(rows: list[Row], *, rules: Rules, held: Inventory, generated: str) -> 
                     for r in on_disk
                 ],
                 widths=[
-                    "48mm",
-                    "18mm",
+                    "43mm",
+                    "16mm",
+                    "9mm",
                     "10mm",
-                    "11mm",
-                    "22mm",
-                    "18mm",
-                    "30mm",
-                    "17mm",
-                    "11mm",
+                    "19mm",
+                    "16mm",
+                    "26mm",
+                    "16mm",
+                    "9mm",
                 ],
                 align=["l", "l", "r", "l", "l", "l", "l", "l", "l"],
             )

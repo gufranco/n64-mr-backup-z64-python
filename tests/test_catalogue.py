@@ -317,7 +317,7 @@ class TestVideoState:
 
         assert state.aa_patchable is False
         assert state.dither_patchable is False
-        assert "checksum invalid" in state.summary
+        assert "no boot chip" in state.summary
 
     def test_the_summary_names_both_when_both_apply(self):
         state = catalogue.Video(modes=8, antialiasing_on=6, dither_requests=1)
