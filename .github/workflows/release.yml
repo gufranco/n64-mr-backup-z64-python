@@ -93,7 +93,7 @@ jobs:
       # came from the build rather than from somebody's laptop.
       - name: Sign it
         run: |
-          python -m pip install --disable-pip-version-check sigstore==3.6.1
+          python -m pip install --disable-pip-version-check sigstore==4.5.0
           python -m sigstore sign sbom.json --bundle sbom.json.sigstore.json
         shell: bash
 
