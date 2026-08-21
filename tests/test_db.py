@@ -203,17 +203,18 @@ class TestLookupByCodeAlone:
         assert found.cic == "6102"
 
 
-def cached_catalogue() -> db.Database:
-    """The downloaded catalogue, or skip. Never returns without one."""
-    try:
-        return db.load_default()
-    except db.DatabaseMissingError:
-        pytest.skip("catalogue not cached")
+# The catalogue is downloaded rather than shipped, so on a machine that has never
+# fetched it these have nothing to check. Deciding that once as a marker beats a
+# helper that returns a catalogue on one path and raises on the other.
+requires_catalogue = pytest.mark.skipif(
+    not db.available(), reason="the catalogue has not been downloaded on this machine"
+)
 
 
+@requires_catalogue
 class TestTheRealCatalogueCoversTheCollection:
     def test_it_knows_a_flashram_game(self):
-        assert cached_catalogue().lookup_by_code("NZSE").save == "flash128k"
+        assert db.load_default().lookup_by_code("NZSE").save == "flash128k"
 
     def test_it_knows_an_eeprom_game(self):
-        assert cached_catalogue().lookup_by_code("NSME").save == "eeprom512"
+        assert db.load_default().lookup_by_code("NSME").save == "eeprom512"
