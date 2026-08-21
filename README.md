@@ -21,7 +21,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**11** commands · **zero** runtime dependencies · **905** tests · **byte-reproducible** images · coverage gated at **95%** · types checked **strict**
+**12** commands · **zero** runtime dependencies · **963** tests · **byte-reproducible** images · coverage gated at **95%** · types checked **strict**
 
 ```console
 $ z64kit doctor
@@ -275,6 +275,7 @@ z64kit merge game.z64 game.aps --no-aa --output merged.aps --apply
 | `vi` | Report the video configuration in each ROM, read only |
 | `merge` | Fold a video change into a patch the game already needs |
 | `artifacts` | Check the supplied-artifact folder against the manifest |
+| `payload` | Write the used prefix of an image, stamped with a serial for one disk |
 | `db-update` | Download the save-type catalogue. The only command that uses the network |
 | `doctor` | Report what is installed, and check the supplied files against the manifest |
 | _no command_ | Run the guided flow: five questions, nothing written until you confirm |
@@ -298,7 +299,7 @@ src/z64kit/
   inventory.py    # which cartridges are owned
   db.py           # save-type catalogue, fetched not bundled
   cli.py          # the command line
-  fat/            # FAT16 volume construction and verification
+  fat/            # FAT16 volume construction, verification, and disk payloads
   report/         # LaTeX catalogue and rendering
   rom/            # header parsing and per-CIC checksum
   data/           # manifests. No payloads
