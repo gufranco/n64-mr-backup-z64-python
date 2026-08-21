@@ -82,8 +82,8 @@ files are the same bytes, so an image can be verified rather than trusted.
 <td width="50%" valign="top">
 
 ### Video settings without touching the ROM
-Anti-aliasing, divot, and gamma dithering can be turned off. The change ships as a patch bound to
-the untouched ROM, never as an edit to the file on disk.
+Anti-aliasing, divot, gamma dithering, and the dedither filter can be turned off. The change ships
+as a patch bound to the untouched ROM, never as an edit to the file on disk.
 
 </td>
 </tr>
@@ -272,7 +272,7 @@ z64kit merge game.z64 game.aps --no-aa --output merged.aps --apply
 | `build` | Write the disk images, verifying every file on the way out |
 | `inventory` | Tick off which cartridges you own, and see what the gaps cost |
 | `report` | Write the printable catalogue |
-| `vi` | Report the video configuration in each ROM, read only |
+| `vi` | Report the video configuration in each ROM, and edit it under guard |
 | `merge` | Fold a video change into a patch the game already needs |
 | `artifacts` | Check the supplied-artifact folder against the manifest |
 | `payload` | Write the used prefix of an image, stamped with a serial for one disk |
