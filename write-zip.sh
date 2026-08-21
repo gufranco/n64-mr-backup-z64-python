@@ -9,7 +9,7 @@ DISK=""
 LABEL=""
 
 usage() {
-    cat <<'USAGE'
+  cat <<'USAGE'
 usage: write-zip.sh <diskN> [LABEL] [-y] [--full]
 
   <diskN>   target device, for example disk8. Never /dev/diskN, just diskN.
@@ -24,26 +24,32 @@ usage: write-zip.sh <diskN> [LABEL] [-y] [--full]
 
   IMG=other.img write-zip.sh disk8    use a different master image.
 USAGE
-    exit 1
+  exit 1
 }
 
 for arg in "$@"; do
-    case "$arg" in
-        -y) ASSUME_YES=1 ;;
-        --full) FULL=1 ;;
-        -h|--help) usage ;;
-        disk*) DISK="$arg" ;;
-        *) LABEL="$arg" ;;
-    esac
+  case "$arg" in
+    -y) ASSUME_YES=1 ;;
+    --full) FULL=1 ;;
+    -h | --help) usage ;;
+    disk*) DISK="$arg" ;;
+    *) LABEL="$arg" ;;
+  esac
 done
 
 [ -n "$DISK" ] || usage
-[ -f "$IMG" ] || { echo "error: image not found: $IMG" >&2; exit 1; }
+[ -f "$IMG" ] || {
+  echo "error: image not found: $IMG" >&2
+  exit 1
+}
 
 DEV="/dev/$DISK"
 RAW="/dev/r$DISK"
 
-INFO="$(diskutil info "$DISK" 2>/dev/null)" || { echo "error: no such device: $DISK" >&2; exit 1; }
+INFO="$(diskutil info "$DISK" 2>/dev/null)" || {
+  echo "error: no such device: $DISK" >&2
+  exit 1
+}
 
 SIZE="$(printf '%s\n' "$INFO" | awk -F'[()]' '/^ *Disk Size:/ {print $2}' | awk '{print $1}')"
 REMOVABLE="$(printf '%s\n' "$INFO" | awk -F': *' '/Removable Media:/ {print $2}')"
@@ -51,7 +57,10 @@ LOCATION="$(printf '%s\n' "$INFO" | awk -F': *' '/Device Location:/ {print $2}')
 MEDIANAME="$(printf '%s\n' "$INFO" | awk -F': *' '/Device \/ Media Name:/ {print $2}')"
 VIRTUAL="$(printf '%s\n' "$INFO" | awk -F': *' '/^ *Virtual:/ {print $2}')"
 
-fail() { echo "REFUSING TO WRITE: $1" >&2; exit 1; }
+fail() {
+  echo "REFUSING TO WRITE: $1" >&2
+  exit 1
+}
 
 [ "$SIZE" = "$EXPECTED_BYTES" ] || fail "$DISK is $SIZE bytes, a Zip 100 is $EXPECTED_BYTES"
 [ "$LOCATION" = "External" ] || fail "$DISK is not an external device (Device Location: $LOCATION)"
@@ -69,14 +78,14 @@ trap 'rm -f "$TMP"' EXIT
 PREP="$(python3 z64_prep.py "$IMG" "$TMP" ${LABEL:+"$LABEL"})"
 
 if [ "$FULL" = "1" ]; then
-    cp "$IMG" "$TMP.full"
-    dd if="$TMP" of="$TMP.full" conv=notrunc 2>/dev/null
-    mv "$TMP.full" "$TMP"
-    SECTORS=$((EXPECTED_BYTES / 512))
-    BYTES="$EXPECTED_BYTES"
+  cp "$IMG" "$TMP.full"
+  dd if="$TMP" of="$TMP.full" conv=notrunc 2>/dev/null
+  mv "$TMP.full" "$TMP"
+  SECTORS=$((EXPECTED_BYTES / 512))
+  BYTES="$EXPECTED_BYTES"
 else
-    SECTORS="$(printf '%s\n' "$PREP" | awk -F= '/^SECTORS=/{print $2}')"
-    BYTES="$(printf '%s\n' "$PREP" | awk -F= '/^BYTES=/{print $2}')"
+  SECTORS="$(printf '%s\n' "$PREP" | awk -F= '/^SECTORS=/{print $2}')"
+  BYTES="$(printf '%s\n' "$PREP" | awk -F= '/^BYTES=/{print $2}')"
 fi
 
 SERIAL="$(printf '%s\n' "$PREP" | awk -F= '/^SERIAL=/{print $2}')"
@@ -87,33 +96,36 @@ echo "serial      $SERIAL (fresh for this disk, the image carries none)"
 [ -n "$LABEL" ] && echo "label       $LABEL"
 
 if [ "$ASSUME_YES" != "1" ]; then
-    printf 'Write to %s and destroy its contents? type YES: ' "$DEV"
-    read -r reply
-    [ "$reply" = "YES" ] || { echo "aborted"; exit 1; }
+  printf 'Write to %s and destroy its contents? type YES: ' "$DEV"
+  read -r reply
+  [ "$reply" = "YES" ] || {
+    echo "aborted"
+    exit 1
+  }
 fi
 
 sudo -v
 diskutil unmountDisk force "$DEV" >/dev/null
 
 BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD=1048576
-BLOCKS=$(( (BYTES + BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD - 1) / BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD ))
+BLOCKS=$(((BYTES + BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD - 1) / BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD))
 
 START=$(date +%s)
 sudo dd if="$TMP" of="$RAW" bs="$BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD" 2>&1 | tail -1
 sync
 END=$(date +%s)
 
-WANT="$(shasum -a 256 < "$TMP" | awk '{print $1}')"
+WANT="$(shasum -a 256 <"$TMP" | awk '{print $1}')"
 GOT="$(sudo dd if="$RAW" bs="$BLOCK_BYTES_ACCEPTED_BY_BSD_AND_GNU_DD" count="$BLOCKS" 2>/dev/null | head -c "$BYTES" | shasum -a 256 | awk '{print $1}')"
 
 sudo diskutil eject "$DEV" >/dev/null 2>&1 && echo "ejected     $DEV, safe to remove"
 
 if [ "$WANT" = "$GOT" ]; then
-    echo "verify      OK, sha256 $WANT"
-    echo "elapsed     $((END - START))s"
+  echo "verify      OK, sha256 $WANT"
+  echo "elapsed     $((END - START))s"
 else
-    echo "verify      FAILED" >&2
-    echo "  expected  $WANT" >&2
-    echo "  read back $GOT" >&2
-    exit 1
+  echo "verify      FAILED" >&2
+  echo "  expected  $WANT" >&2
+  echo "  read back $GOT" >&2
+  exit 1
 fi
