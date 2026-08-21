@@ -130,16 +130,29 @@ jobs:
           python -m sigstore sign sbom.json --bundle sbom.json.sigstore.json
         shell: bash
 
+      # --match 'v*' is load-bearing. The moving `latest` tag below sits on the
+      # same commit as the newest version tag, and a bare `git describe` picks it
+      # over the version tag, which then fails as a release name because no
+      # release is called `latest`. Both steps below read this one answer so they
+      # cannot disagree about which tag was released.
+      - name: Resolve the released tag
+        id: released
+        run: |
+          tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          echo "tag=${tag}" >>"$GITHUB_OUTPUT"
+          if [ -z "${tag}" ]; then
+            echo "::notice title=No tag::No version tag is reachable, so there is nothing to attach or move."
+          else
+            echo "released tag: ${tag}"
+          fi
+        shell: bash
+
       - name: Attach both to the release
+        if: steps.released.outputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
-          if [ -z "${tag}" ]; then
-            echo "::notice title=No tag::Nothing was released, so there is nothing to attach."
-            exit 0
-          fi
-          gh release upload "${tag}" sbom.json sbom.json.sigstore.json --clobber
+          TAG: ${{ steps.released.outputs.tag }}
+        run: gh release upload "${TAG}" sbom.json sbom.json.sigstore.json --clobber
         shell: bash
 
       # The install line in README.md and GUIDE.md points at refs/tags/latest,
@@ -147,18 +160,15 @@ jobs:
       # onto whatever was just released. Every vN.N.N tag stays immutable for
       # anyone who wants to pin one.
       - name: Move the latest tag onto this release
+        if: steps.released.outputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.released.outputs.tag }}
         run: |
-          tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
-          if [ -z "${tag}" ]; then
-            echo "::notice title=No tag::Nothing was released, so latest stays where it is."
-            exit 0
-          fi
-          sha=$(git rev-list -n 1 "${tag}")
+          sha=$(git rev-list -n 1 "${TAG}")
           gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/latest" \
             -f sha="${sha}" -F force=true >/dev/null 2>&1 ||
             gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
               -f ref="refs/tags/latest" -f sha="${sha}" >/dev/null
-          echo "latest -> ${tag} (${sha})"
+          echo "latest -> ${TAG} (${sha})"
         shell: bash
