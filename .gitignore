@@ -84,7 +84,6 @@ coverage.xml
 /z64_add.py
 /z64_build.py
 /z64_name.py
-/z64_prep.py
 /Z64-WORKFLOW.md
 
 # One machine's disk digests and one drive's read timings. Neither generalises,

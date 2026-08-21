@@ -1517,3 +1517,111 @@ class TestTheGuidedFlowStep:
 
         assert cli.main([]) == 0
         assert seen["runner"] is cli._run_step
+
+
+class TestPayloadCommand:
+    """The prefix a writer copies to a disk. `write-zip.sh` reads the printed
+    key=value lines, so their names are an interface rather than a detail.
+    """
+
+    def _image(self, tmp_path):
+        from z64kit.fat import image
+
+        made = tmp_path / "master.img"
+        made.write_bytes(image.blank_image())
+        return made
+
+    def test_it_writes_the_payload(self, tmp_path, capsys):
+        from z64kit import cli
+
+        out = tmp_path / "payload.bin"
+
+        assert cli.main(["payload", str(self._image(tmp_path)), str(out)]) == 0
+        assert out.exists()
+        capsys.readouterr()
+
+    def test_the_payload_is_shorter_than_the_image(self, tmp_path, capsys):
+        from z64kit import cli
+
+        source = self._image(tmp_path)
+        out = tmp_path / "payload.bin"
+        cli.main(["payload", str(source), str(out)])
+        capsys.readouterr()
+
+        assert out.stat().st_size < source.stat().st_size
+
+    def test_it_reports_every_field_the_writer_reads(self, tmp_path, capsys):
+        from z64kit import cli
+
+        cli.main(["payload", str(self._image(tmp_path)), str(tmp_path / "p.bin")])
+        printed = capsys.readouterr().out
+
+        for key in ("SECTORS=", "BYTES=", "SERIAL=", "HIGHEST_CLUSTER=", "DATA_START_LBA="):
+            assert key in printed
+
+    def test_the_byte_count_matches_the_file_it_wrote(self, tmp_path, capsys):
+        from z64kit import cli
+
+        out = tmp_path / "payload.bin"
+        cli.main(["payload", str(self._image(tmp_path)), str(out)])
+        printed = capsys.readouterr().out
+        reported = next(int(x.split("=")[1]) for x in printed.split() if x.startswith("BYTES="))
+
+        assert reported == out.stat().st_size
+
+    def test_a_given_serial_lands_in_the_output(self, tmp_path, capsys):
+        from z64kit import cli
+
+        source = str(self._image(tmp_path))
+        cli.main(["payload", source, str(tmp_path / "p.bin"), "--serial", "ABC"])
+
+        assert "SERIAL=00000ABC" in capsys.readouterr().out
+
+    def test_two_runs_without_a_serial_differ(self, tmp_path, capsys):
+        from z64kit import cli
+
+        source = self._image(tmp_path)
+        cli.main(["payload", str(source), str(tmp_path / "a.bin")])
+        cli.main(["payload", str(source), str(tmp_path / "b.bin")])
+        printed = capsys.readouterr().out
+        serials = [line for line in printed.splitlines() if line.startswith("SERIAL=")]
+
+        assert serials[0] != serials[1]
+
+    def test_it_refuses_a_missing_image(self, tmp_path, capsys):
+        from z64kit import cli
+
+        code = cli.main(["payload", str(tmp_path / "nope.img"), str(tmp_path / "p.bin")])
+
+        assert code == 1
+        assert "could not read" in capsys.readouterr().out
+
+    def test_it_refuses_a_file_that_is_not_an_image(self, tmp_path, capsys):
+        from z64kit import cli
+
+        bad = tmp_path / "bad.img"
+        bad.write_bytes(b"not an image")
+
+        code = cli.main(["payload", str(bad), str(tmp_path / "p.bin")])
+
+        assert code == 1
+        assert "not a Zip 100 image" in capsys.readouterr().out
+
+    def test_it_reports_why_the_image_was_refused(self, tmp_path, capsys):
+        from z64kit import cli
+
+        bad = tmp_path / "bad.img"
+        bad.write_bytes(b"not an image")
+        cli.main(["payload", str(bad), str(tmp_path / "p.bin")])
+
+        assert "expected" in capsys.readouterr().out
+
+    def test_it_refuses_an_output_path_it_cannot_write(self, tmp_path, capsys):
+        from z64kit import cli
+
+        blocked = tmp_path / "missing" / "deep" / "p.bin"
+
+        code = cli.main(["payload", str(self._image(tmp_path)), str(blocked)])
+
+        assert code == 1
+        assert "could not write" in capsys.readouterr().out

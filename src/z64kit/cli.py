@@ -22,6 +22,7 @@ import argparse
 import datetime
 import hashlib
 import json
+import secrets
 import struct
 import sys
 from pathlib import Path
@@ -40,7 +41,7 @@ from . import (
     vi,
     wizard,
 )
-from .fat import image, writer
+from .fat import image, payload, writer
 from .report import catalogue, hardware, latex, render
 from .rom import header
 
@@ -167,7 +168,7 @@ def _crc_key(crc1: int, crc2: int) -> bytes:
     return b"crc:" + struct.pack(">II", crc1, crc2)
 
 
-def _binding_key(sidecar: bytes | None, payload: bytes) -> bytes | None:
+def _binding_key(sidecar: bytes | None, blob: bytes) -> bytes | None:
     """What this patch binds to, preferring a header sidecar over stored checksums.
 
     A `.hdr` gives the full 64 bytes and is normalised to big endian first, so a
@@ -179,9 +180,9 @@ def _binding_key(sidecar: bytes | None, payload: bytes) -> bytes | None:
         normalised = header.identity_key(sidecar)
         if normalised is not None:
             return normalised
-    if payload[: len(aps.MAGIC)] == aps.MAGIC:
+    if blob[: len(aps.MAGIC)] == aps.MAGIC:
         try:
-            parsed = aps.parse(payload)
+            parsed = aps.parse(blob)
         except aps.FormatError:
             return None
         return _crc_key(parsed.crc1, parsed.crc2)
@@ -824,6 +825,40 @@ def cmd_artifacts(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_payload(args: argparse.Namespace) -> int:
+    """Write the used prefix of an image, stamped with a serial for one disk.
+
+    Exists for `write-zip.sh`, which needs the byte count before it starts and would
+    otherwise spend minutes pushing zeroes at a drive managing about 765 kB/s.
+    """
+    source = Path(args.image)
+    try:
+        raw = source.read_bytes()
+    except OSError as error:
+        print(f"could not read {source}: {error}")
+        return 1
+
+    serial = args.serial if args.serial is not None else secrets.randbits(32)
+    try:
+        made = payload.prepare(raw, serial=serial)
+    except payload.ImageRejectedError as error:
+        print(f"{source} is not a Zip 100 image this can write: {error}")
+        return 1
+
+    try:
+        Path(args.output).write_bytes(made.body)
+    except OSError as error:
+        print(f"could not write {args.output}: {error}")
+        return 1
+
+    print(f"SECTORS={made.sectors}")
+    print(f"BYTES={made.size}")
+    print(f"SERIAL={made.serial:08X}")
+    print(f"HIGHEST_CLUSTER={made.highest_cluster}")
+    print(f"DATA_START_LBA={made.data_start_lba}")
+    return 0
+
+
 def cmd_db_update(_args: argparse.Namespace) -> int:
     """Fetch the save-type catalogue. This is the only command that uses the network."""
     try:
@@ -1009,6 +1044,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--write-readme", action="store_true", help="regenerate the folder's documentation"
     )
     art.set_defaults(func=cmd_artifacts)
+
+    pay = subparsers.add_parser(
+        "payload", help="write the used prefix of an image, stamped for one disk"
+    )
+    pay.add_argument("image")
+    pay.add_argument("output")
+    pay.add_argument(
+        "--serial",
+        type=lambda given: int(given, 16),
+        default=None,
+        help="hex volume serial, default a fresh random one per disk",
+    )
+    pay.set_defaults(func=cmd_payload)
 
     dbu = subparsers.add_parser(
         "db-update", help="download the save-type catalogue, the only networked command"

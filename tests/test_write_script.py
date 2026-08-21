@@ -115,9 +115,45 @@ class TestIdentity:
         assert "SERIAL" in text
 
     def test_no_option_keeps_the_image_serial(self, text):
-        """Images carry no identity, so a disk that kept it would match every other."""
+        """Two disks sharing a serial can make real mode DOS serve a cached FAT from
+        the previous one after a swap, so there is no way to ask for that."""
         assert "fixed-serial" not in text
         assert "FIXED_SERIAL" not in text
+
+    def test_there_is_no_way_to_ask_for_a_volume_label(self, text):
+        """An image carries no label by design, and the writer offers no way to add
+        one, so every disk reads as NO NAME."""
+        assert "LABEL" not in text
+
+    def test_an_unrecognised_argument_is_refused_rather_than_read_as_a_label(self, text):
+        """It used to treat any unknown word as a label, so a typo silently became
+        the volume name instead of an error."""
+        assert "unknown argument" in text
+
+
+class TestItDependsOnlyOnTrackedCode:
+    """The script used to call a helper that .gitignore excluded, so a clone got a
+    script that could not run and a guide that pointed at it."""
+
+    def test_it_calls_the_packaged_command(self, text):
+        assert "payload" in text
+
+    def test_it_no_longer_calls_the_untracked_helper(self, text):
+        assert "z64_prep" not in text
+
+    def test_the_helper_is_gone_from_the_tree(self):
+        assert not (SCRIPT.parent / "z64_prep.py").exists()
+
+    def test_the_command_it_calls_is_overridable(self, text):
+        """So an installed z64kit can be used instead of the checkout."""
+        assert "Z64KIT" in text
+
+    def test_it_stops_when_that_command_fails(self, text):
+        """A failed prepare used to leave PREP empty and the byte count blank, which
+        then wrote nothing and reported success."""
+        prepare = text[text.index("PREP=") :]
+
+        assert "exit 1" in prepare[: prepare.index("\n\n")]
 
 
 class TestVerification:

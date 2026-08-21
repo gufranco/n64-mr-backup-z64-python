@@ -3,26 +3,29 @@ set -euo pipefail
 
 EXPECTED_BYTES=100663296
 IMG="${IMG:-z64-master.img}"
+Z64KIT="${Z64KIT:-python3 -m z64kit.cli}"
 ASSUME_YES=0
 FULL=0
 DISK=""
-LABEL=""
 
 usage() {
   cat <<'USAGE'
-usage: write-zip.sh <diskN> [LABEL] [-y] [--full]
+usage: write-zip.sh <diskN> [-y] [--full]
 
   <diskN>   target device, for example disk8. Never /dev/diskN, just diskN.
-  LABEL     optional FAT volume label, up to 11 characters.
   -y        skip the confirmation prompt.
   --full    write all 96 MB instead of only the filesystem metadata.
 
-  Every disk gets a fresh volume serial. An image carries none, so without one
-  every disk would look identical to real mode DOS, which uses the serial to
-  notice that the media changed. Two disks sharing one can make it serve a cached
-  FAT from the previous disk after a swap, which reads as corruption.
+  Images carry no volume label and no serial, so two of them holding the same
+  files are the same bytes. A disk gets a fresh serial on the way out. Real mode
+  DOS, which is what the unit runs, uses the serial to notice that the media
+  changed, and two disks sharing one can make it serve a cached FAT from the
+  previous disk after a swap, which reads as corruption. There is no label
+  option, by design.
 
   IMG=other.img write-zip.sh disk8    use a different master image.
+  Z64KIT=z64kit write-zip.sh disk8    use an installed z64kit rather than the
+                                      module in this checkout.
 USAGE
   exit 1
 }
@@ -33,7 +36,10 @@ for arg in "$@"; do
     --full) FULL=1 ;;
     -h | --help) usage ;;
     disk*) DISK="$arg" ;;
-    *) LABEL="$arg" ;;
+    *)
+      echo "error: unknown argument: $arg" >&2
+      usage
+      ;;
   esac
 done
 
@@ -75,7 +81,10 @@ echo "image       $IMG"
 TMP="$(mktemp "${TMPDIR:-/tmp}/z64payload.XXXXXX")"
 trap 'rm -f "$TMP"' EXIT
 
-PREP="$(python3 z64_prep.py "$IMG" "$TMP" ${LABEL:+"$LABEL"})"
+PREP="$($Z64KIT payload "$IMG" "$TMP")" || {
+  echo "$PREP" >&2
+  exit 1
+}
 
 if [ "$FULL" = "1" ]; then
   cp "$IMG" "$TMP.full"
@@ -93,7 +102,6 @@ HIGH="$(printf '%s\n' "$PREP" | awk -F= '/^HIGHEST_CLUSTER=/{print $2}')"
 
 echo "payload     $SECTORS sectors, $BYTES bytes (highest used cluster $HIGH)"
 echo "serial      $SERIAL (fresh for this disk, the image carries none)"
-[ -n "$LABEL" ] && echo "label       $LABEL"
 
 if [ "$ASSUME_YES" != "1" ]; then
   printf 'Write to %s and destroy its contents? type YES: ' "$DEV"
