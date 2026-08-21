@@ -248,6 +248,7 @@ class FakeGame:
     crc1: str = "AABBCCDD"
     true_extension: str = "Z64"
     checksum_valid: bool = True
+    path: str = "/nonexistent/not-a-real-rom.z64"
 
 
 class TestRowsFromCarriesRequirements:
@@ -272,3 +273,155 @@ class TestRowsFromCarriesRequirements:
         )
 
         assert rows[0].requirement == ""
+
+
+def video_row(title="A Game", disk="Zip Disk 01", **video):
+    return catalogue.Row(
+        disk=disk,
+        title=title,
+        name83="AGAME.Z64",
+        mib=16,
+        cic="6102",
+        save="none",
+        status="native",
+        flags="",
+        crc1="AABBCCDD",
+        video=catalogue.Video(**video) if video or video == {} else None,
+    )
+
+
+class TestVideoState:
+    """Two settings that live in different places and fail for different reasons."""
+
+    def test_anti_aliasing_needs_a_mode_table(self):
+        assert catalogue.Video(modes=0, antialiasing_on=0).aa_patchable is False
+
+    def test_anti_aliasing_needs_it_to_be_on_in_the_first_place(self):
+        assert catalogue.Video(modes=8, antialiasing_on=0).aa_patchable is False
+
+    def test_anti_aliasing_is_patchable_when_a_table_has_it_on(self):
+        assert catalogue.Video(modes=8, antialiasing_on=6).aa_patchable is True
+
+    def test_the_filter_needs_no_mode_table(self):
+        """GoldenEye 007 carries the routine and no table."""
+        assert catalogue.Video(modes=0, dither_requests=1).dither_patchable is True
+
+    def test_a_rom_that_never_switches_the_filter_on_is_not_a_gap(self):
+        state = catalogue.Video(modes=8, dither_requests=0)
+
+        assert state.dither_patchable is False
+        assert "unreachable" not in state.summary or state.modes == 0
+
+    def test_an_invalid_checksum_blocks_everything(self):
+        state = catalogue.Video(modes=8, antialiasing_on=6, dither_requests=1, checksum_valid=False)
+
+        assert state.aa_patchable is False
+        assert state.dither_patchable is False
+        assert "checksum invalid" in state.summary
+
+    def test_the_summary_names_both_when_both_apply(self):
+        state = catalogue.Video(modes=8, antialiasing_on=6, dither_requests=1)
+
+        assert "AA" in state.summary
+        assert "dedither" in state.summary
+
+
+class TestVideoSection:
+    def test_the_document_carries_a_video_section(self):
+        rows = [video_row(modes=8, antialiasing_on=6, dither_requests=1)]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert "Video" in out
+
+    def test_it_lists_a_game_with_a_patch_available(self):
+        rows = [video_row(title="Super Mario 64", modes=10, antialiasing_on=6, dither_requests=1)]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert "Games with a video patch available" in out
+        assert "Super Mario 64" in out
+
+    def test_it_explains_that_the_filter_is_the_main_blur(self):
+        rows = [video_row(modes=8, antialiasing_on=6)]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert "dedither filter" in out
+
+    def test_a_refused_game_is_named_with_its_reason(self):
+        rows = [
+            video_row(title="Pokemon Stadium", modes=8, dither_requests=1, checksum_valid=False)
+        ]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert "Video patches refused" in out
+        assert "Pokemon Stadium" in out
+
+    def test_the_disk_listing_carries_a_video_column(self):
+        rows = [video_row(modes=8, antialiasing_on=6, dither_requests=1)]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert "Video" in out
+        assert "dedither" in out
+
+    def test_a_game_that_could_not_be_read_says_so_rather_than_claiming_it_is_clean(self):
+        rows = [
+            catalogue.Row(
+                disk="Zip Disk 01",
+                title="Unknown",
+                name83="U.Z64",
+                mib=8,
+                cic="6102",
+                save="none",
+                status="native",
+                flags="",
+                crc1="AABBCCDD",
+            )
+        ]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert catalogue.VIDEO_UNREAD in out
+
+    def test_no_video_section_when_nothing_was_read(self):
+        rows = [
+            catalogue.Row(
+                disk="Zip Disk 01",
+                title="Unknown",
+                name83="U.Z64",
+                mib=8,
+                cic="6102",
+                save="none",
+                status="native",
+                flags="",
+                crc1="AABBCCDD",
+            )
+        ]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert "Games with a video patch available" not in out
+
+
+class TestVideoFor:
+    def test_an_unreadable_rom_is_unknown_rather_than_clean(self):
+        game = FakeGame(filename="x.z64", stem="X", path="/nonexistent/x.z64")
+
+        assert catalogue.video_for(game) is None
