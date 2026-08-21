@@ -36,6 +36,18 @@ jobs:
       - name: Lint
         run: ruff check --output-format=github .
 
+      # The workflows are the one part of this repository that nothing else
+      # checks: a mistake in them is found by pushing, and the push is the thing
+      # being checked.
+      - name: Lint the workflows
+        uses: raven-actions/actionlint@v2
+
+      - name: Lint the shell scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck --severity=style --shell=bash scripts/*.sh write-zip.sh
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v5
