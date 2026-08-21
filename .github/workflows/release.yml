@@ -44,6 +44,14 @@ jobs:
       - name: Install release tooling
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      # Recorded before semantic-release runs, so the steps after it can tell a
+      # new version from a run that released nothing. A published release must
+      # never have its signed assets rewritten by a later docs-only push.
+      - name: Record the tag that already existed
+        id: before
+        run: echo "tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)" >>"$GITHUB_OUTPUT"
+        shell: bash
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -137,12 +145,18 @@ jobs:
       # cannot disagree about which tag was released.
       - name: Resolve the released tag
         id: released
+        env:
+          BEFORE: ${{ steps.before.outputs.tag }}
         run: |
           tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
-          echo "tag=${tag}" >>"$GITHUB_OUTPUT"
           if [ -z "${tag}" ]; then
-            echo "::notice title=No tag::No version tag is reachable, so there is nothing to attach or move."
+            echo "tag=" >>"$GITHUB_OUTPUT"
+            echo "::notice title=No release::No version tag is reachable, so there is nothing to attach or move."
+          elif [ "${tag}" = "${BEFORE}" ]; then
+            echo "tag=" >>"$GITHUB_OUTPUT"
+            echo "::notice title=No release::${tag} was already published, so its assets stay as they are."
           else
+            echo "tag=${tag}" >>"$GITHUB_OUTPUT"
             echo "released tag: ${tag}"
           fi
         shell: bash
@@ -152,7 +166,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.released.outputs.tag }}
-        run: gh release upload "${TAG}" sbom.json sbom.json.sigstore.json --clobber
+        run: gh release upload "${TAG}" sbom.json sbom.json.sigstore.json
         shell: bash
 
       # The install line in README.md and GUIDE.md points at refs/tags/latest,
