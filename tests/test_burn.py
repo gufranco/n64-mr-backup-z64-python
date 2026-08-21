@@ -18,6 +18,8 @@ them.
 
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 
 from z64kit import burn
@@ -215,3 +217,176 @@ class TestItAsksForRootOnce:
 
     def test_the_command_survives_the_prefix(self):
         assert burn.privileged(["dd", "if=/dev/rdisk8"])[1:] == ["dd", "if=/dev/rdisk8"]
+
+
+class FakeDrive:
+    """A drive that answers dd and diskutil, and can fail on cue.
+
+    Standing in for the external tools rather than for anything in this project:
+    a real drive cannot be made to click on demand, and the abort logic is the
+    part most worth proving.
+    """
+
+    def __init__(self, contents=b"", *, fail_on=None, corrupt_chunk=None, slow_chunk=None):
+        self.contents = bytearray(contents)
+        self.fail_on = fail_on
+        self.corrupt_chunk = corrupt_chunk
+        self.slow_chunk = slow_chunk
+        self.commands = []
+        self.reads = 0
+        self.writes = 0
+
+    def __call__(self, command, **kwargs):
+        self.commands.append(command)
+        joined = " ".join(command)
+        if "dd" not in joined:
+            return subprocess.CompletedProcess(command, 0, b"", b"")
+        chunk = next(int(a.split("=")[1]) for a in command if a.startswith(("seek=", "skip=")))
+        size = next(int(a.split("=")[1]) for a in command if a.startswith("bs="))
+        if "of=/dev/r" in joined:
+            self.writes += 1
+            if self.fail_on == ("write", chunk):
+                return subprocess.CompletedProcess(command, 1, b"", b"I/O error")
+            payload = kwargs.get("input", b"")
+            start = chunk * size
+            self.contents[start : start + len(payload)] = payload
+            return subprocess.CompletedProcess(command, 0, b"", b"")
+        self.reads += 1
+        if self.fail_on == ("read", chunk):
+            return subprocess.CompletedProcess(command, 1, b"", b"I/O error")
+        block = bytes(self.contents[chunk * size : chunk * size + size])
+        if self.corrupt_chunk == chunk:
+            block = bytes(len(block))
+        return subprocess.CompletedProcess(command, 0, block, b"")
+
+
+def payload_file(tmp_path, size):
+    """Every byte non-zero and varying, so zeroing a chunk is a visible change.
+
+    A payload of zeros would make the corruption tests pass against a check that
+    does nothing.
+    """
+    made = tmp_path / "payload.bin"
+    made.write_bytes(bytes((index * 7 + 1) % 256 or 0xFF for index in range(size)))
+    return made
+
+
+class TestWritingADisk:
+    def test_a_healthy_drive_writes_and_verifies(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40))
+
+        result = burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+
+        assert result.chunks == 3
+
+    def test_it_ejects_when_it_finishes(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40))
+
+        result = burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+
+        assert result.ejected is True
+
+    def test_it_unmounts_before_writing_and_before_reading(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40))
+
+        burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+        unmounts = [c for c in drive.commands if "unmountDisk" in " ".join(c)]
+
+        assert len(unmounts) == 2
+
+    def test_it_never_mounts(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40))
+
+        burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+
+        assert not any(c[:2] == ["sudo", "diskutil"] and c[2] == "mount" for c in drive.commands)
+
+    def test_everything_goes_through_the_raw_device(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40))
+
+        burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+        transfers = [" ".join(c) for c in drive.commands if " dd " in f" {' '.join(c)} "]
+
+        assert transfers
+        assert all("/dev/rdisk8" in t for t in transfers)
+
+    def test_a_failed_write_stops_and_ejects(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40), fail_on=("write", 1))
+
+        with pytest.raises(burn.WriteFailedError, match="write failed"):
+            burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+
+        assert any("eject" in " ".join(c) for c in drive.commands)
+
+    def test_a_failed_write_does_not_go_on_to_the_next_chunk(self, tmp_path):
+        source = payload_file(tmp_path, 400)
+        drive = FakeDrive(bytes(400), fail_on=("write", 1))
+
+        with pytest.raises(burn.WriteFailedError):
+            burn.write_image(source, device(), total_bytes=400, chunk_bytes=16, run=drive)
+
+        assert drive.writes == 2
+
+    def test_a_failed_read_stops_and_ejects(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40), fail_on=("read", 0))
+
+        with pytest.raises(burn.WriteFailedError, match="read failed"):
+            burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+
+        assert any("eject" in " ".join(c) for c in drive.commands)
+
+    def test_a_chunk_that_comes_back_wrong_stops_the_run(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40), corrupt_chunk=1)
+
+        with pytest.raises(burn.WriteFailedError, match="came back different"):
+            burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+
+    def test_a_corrupt_chunk_is_named(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40), corrupt_chunk=2)
+
+        with pytest.raises(burn.WriteFailedError, match="chunk 2"):
+            burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+
+    def test_a_stall_stops_the_run(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40))
+        always_stalled = burn.StallWatch(ceiling_seconds=-1)
+
+        with pytest.raises(burn.WriteFailedError, match="limit"):
+            burn.write_image(
+                source, device(), total_bytes=40, chunk_bytes=16, watch=always_stalled, run=drive
+            )
+
+    def test_the_last_partial_chunk_verifies(self, tmp_path):
+        """Comparing a short written chunk against a full block read off the disk
+        would fail on every healthy write."""
+        source = payload_file(tmp_path, 40)
+        drive = FakeDrive(bytes(40))
+
+        result = burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+
+        assert result.chunks == 3
+
+    def test_it_says_what_it_is_doing(self, tmp_path):
+        source = payload_file(tmp_path, 40)
+        said = []
+
+        burn.write_image(
+            source,
+            device(),
+            total_bytes=40,
+            chunk_bytes=16,
+            run=FakeDrive(bytes(40)),
+            say=said.append,
+        )
+
+        assert any("never mounted" in line for line in said)

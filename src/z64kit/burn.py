@@ -203,21 +203,27 @@ def write_image(
     watch: StallWatch | None = None,
     chunk_bytes: int = CHUNK_BYTES,
     say: object = None,
+    run: object = None,
 ) -> Written:
     """Write, read back, compare every chunk, and eject however it ends.
 
     A fault anywhere ejects before raising. Leaving a suspect disk in a drive is
     the one outcome worth avoiding more than a failed write.
+
+    `run` is the way out to dd and diskutil. It is injected so the decisions
+    here, which are the ones that protect the drive, can be exercised against a
+    drive that fails on cue rather than against a real one that may never fail.
     """
     announce = say if callable(say) else (lambda _message: None)
+    execute = run if callable(run) else _run
     watching = watch or StallWatch()
     spans = list(chunks(total=total_bytes, size=chunk_bytes))
 
     def stop(reason: str) -> None:
-        eject(device)
+        execute(privileged(["diskutil", "eject", device.block]))
         raise WriteFailedError(reason)
 
-    unmount(device)
+    execute(privileged(["diskutil", "unmountDisk", "force", device.block]))
     announce(f"writing     {len(spans)} chunks of {chunk_bytes // 1024 // 1024} MiB")
     started = time.monotonic()
     with payload.open("rb") as source:
@@ -225,7 +231,7 @@ def write_image(
             source.seek(index * chunk_bytes)
             block = source.read(length)
             at = time.monotonic()
-            done = _run(
+            done = execute(
                 privileged(
                     [
                         "dd",
@@ -247,13 +253,13 @@ def write_image(
                 stop(fault)
     elapsed = round(time.monotonic() - started)
 
-    unmount(device)
+    execute(privileged(["diskutil", "unmountDisk", "force", device.block]))
     announce(f"verifying   reading back through {device.raw}, never mounted")
     watching.reset()
     with payload.open("rb") as source:
         for index, length in spans:
             at = time.monotonic()
-            done = _run(
+            done = execute(
                 privileged(
                     ["dd", f"if={device.raw}", f"bs={chunk_bytes}", f"skip={index}", "count=1"]
                 )
@@ -274,4 +280,5 @@ def write_image(
                     f"what it was given."
                 )
 
-    return Written(chunks=len(spans), seconds=elapsed, ejected=eject(device))
+    ejected = execute(privileged(["diskutil", "eject", device.block])).returncode == 0
+    return Written(chunks=len(spans), seconds=elapsed, ejected=ejected)
