@@ -6,15 +6,18 @@ IMG="${IMG:-z64-master.img}"
 Z64KIT="${Z64KIT:-python3 -m z64kit.cli}"
 ASSUME_YES=0
 FULL=0
+EMPTY_OK=0
 DISK=""
 
 usage() {
   cat <<'USAGE'
-usage: write-zip.sh <diskN> [-y] [--full]
+usage: write-zip.sh <diskN> [-y] [--full] [--empty]
 
   <diskN>   target device, for example disk8. Never /dev/diskN, just diskN.
   -y        skip the confirmation prompt.
   --full    write all 96 MB instead of only the filesystem metadata.
+  --empty   allow an image that holds no files. Refused otherwise, because
+            writing one erases the disk and leaves nothing on it.
 
   Images carry no volume label and no serial, so two of them holding the same
   files are the same bytes. A disk gets a fresh serial on the way out. Real mode
@@ -34,6 +37,7 @@ for arg in "$@"; do
   case "$arg" in
     -y) ASSUME_YES=1 ;;
     --full) FULL=1 ;;
+    --empty) EMPTY_OK=1 ;;
     -h | --help) usage ;;
     disk*) DISK="$arg" ;;
     *)
@@ -99,6 +103,12 @@ fi
 
 SERIAL="$(printf '%s\n' "$PREP" | awk -F= '/^SERIAL=/{print $2}')"
 HIGH="$(printf '%s\n' "$PREP" | awk -F= '/^HIGHEST_CLUSTER=/{print $2}')"
+
+if [ "$HIGH" -lt 2 ] && [ "$EMPTY_OK" != "1" ]; then
+  fail "$IMG holds no files. Writing it would erase $DISK and leave a blank volume.
+  If a blank disk is what you want, pass --empty. Otherwise you probably meant a
+  built image: IMG=path/to/Zip_Disk_NN.img write-zip.sh $DISK"
+fi
 
 echo "payload     $SECTORS sectors, $BYTES bytes (highest used cluster $HIGH)"
 echo "serial      $SERIAL (fresh for this disk, the image carries none)"

@@ -202,3 +202,33 @@ class TestVerificationIsNotPainfullySlow:
         read_back = text[text.index("GOT=") :]
 
         assert "head -c" in read_back
+
+
+class TestItRefusesAnEmptyImage:
+    """The default IMG is a build artifact that can be left over from an earlier
+    run. An empty one is 229 KB of metadata, so writing it erases the disk and
+    leaves nothing on it, which no one asks for by accident.
+    """
+
+    def test_it_checks_whether_the_image_holds_any_file(self, text):
+        assert 'HIGH" -lt 2' in text
+
+    def test_it_refuses_rather_than_writing(self, text):
+        guard = text[text.index('HIGH" -lt 2') :]
+
+        assert "fail " in guard[: guard.index("\nfi")]
+
+    def test_it_says_what_would_happen(self, text):
+        assert "leave a blank volume" in text
+
+    def test_it_names_the_way_out(self, text):
+        assert "--empty" in text
+
+    def test_it_points_at_the_image_the_user_probably_meant(self, text):
+        assert "Zip_Disk_NN.img" in text
+
+    def test_the_escape_hatch_is_a_real_flag(self, text):
+        assert "--empty) EMPTY_OK=1" in text
+
+    def test_the_guard_runs_before_anything_is_written(self, text):
+        assert text.index('HIGH" -lt 2') < text.index("sudo dd")
