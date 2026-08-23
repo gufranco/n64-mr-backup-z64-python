@@ -297,17 +297,27 @@ class TestWritingADisk:
         drive = FakeDrive(bytes(40))
 
         burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
-        unmounts = [c for c in drive.commands if "unmountDisk" in " ".join(c)]
+        wanted = burn.privileged(burn.unmount_command(device()))
+        unmounts = [c for c in drive.commands if c == wanted]
 
         assert len(unmounts) == 2
 
-    def test_it_never_mounts(self, tmp_path):
+    def test_it_issues_no_device_command_but_unmount_and_eject(self, tmp_path):
+        """Stronger than looking for a mount verb, and portable. Searching for
+        one platform's word passes on the other by finding nothing."""
         source = payload_file(tmp_path, 40)
         drive = FakeDrive(bytes(40))
 
         burn.write_image(source, device(), total_bytes=40, chunk_bytes=16, run=drive)
+        allowed = [
+            burn.privileged(burn.unmount_command(device())),
+            burn.privileged(burn.eject_command(device())),
+        ]
+        others = [
+            c for c in drive.commands if not any(a.startswith("dd") for a in c) and c not in allowed
+        ]
 
-        assert not any(c[:2] == ["sudo", "diskutil"] and c[2] == "mount" for c in drive.commands)
+        assert others == []
 
     def test_everything_goes_through_the_raw_device(self, tmp_path):
         source = payload_file(tmp_path, 40)

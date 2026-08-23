@@ -120,8 +120,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, label: Linux x86_64, device: lsblk }
-          - { os: ubuntu-24.04-arm, label: Linux arm64, device: lsblk }
+          - { os: ubuntu-latest, label: Linux x86_64, device: umount }
+          - { os: ubuntu-24.04-arm, label: Linux arm64, device: umount }
           - { os: macos-15-intel, label: macOS Intel, device: diskutil }
           - { os: macos-latest, label: macOS Apple silicon, device: diskutil }
     steps:
