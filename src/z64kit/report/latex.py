@@ -136,10 +136,8 @@ def longtable(
     alignment = list(align or ["l"] * len(headers))
     spec = []
     for letter, width in zip(alignment, widths, strict=True):
-        if letter == "r":
-            spec.append(f">{{\\RaggedLeft\\arraybackslash}}p{{{width}}}")
-        else:
-            spec.append(f"p{{{width}}}")
+        ragged = "RaggedLeft" if letter == "r" else "RaggedRight"
+        spec.append(f">{{\\{ragged}\\arraybackslash}}p{{{width}}}")
 
     head = " & ".join(f"\\footnotesize\\textbf{{{escape(h)}}}" for h in headers)
     body = "".join(" & ".join(escape(cell) for cell in row) + " \\\\\n" for row in rows)

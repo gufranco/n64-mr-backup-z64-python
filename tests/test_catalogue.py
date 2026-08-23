@@ -150,6 +150,7 @@ class TestPerGameRequirements:
         assert "Star Wars Episode I Racer" in doc
 
     def test_the_game_title_appears_beside_its_requirement(self):
+        """Trimmed, like everywhere else the title is printed."""
         doc = catalogue.build(
             self.rows_with("Needs a FlashRAM donor."),
             rules=compat.load_rules(),
@@ -157,7 +158,8 @@ class TestPerGameRequirements:
             generated="2026-08-20",
         )
 
-        assert "Blocked Game (USA)" in doc
+        assert "Blocked Game" in doc
+        assert "(USA)" not in doc
 
     def test_a_collection_with_nothing_blocked_omits_the_section(self):
         rows = [
@@ -398,3 +400,50 @@ class TestVideoFor:
         game = FakeGame(filename="x.z64", stem="X", path="/nonexistent/x.z64")
 
         assert catalogue.video_for(game) is None
+
+
+class TestTitlesAreTrimmedForPrint:
+    """The catalogue is USA-only and says so, so (USA) on all 292 rows is six
+    characters of nothing repeated 292 times. Language lists are the same: the
+    unit does not choose a language and the reader cannot act on the list."""
+
+    def test_the_region_tag_goes(self):
+        assert catalogue.printable_title("Super Mario 64 (USA)") == "Super Mario 64"
+
+    def test_a_language_list_goes(self):
+        found = catalogue.printable_title("FIFA - Road to World Cup 98 (USA) (En,Fr,De,Es)")
+
+        assert found == "FIFA - Road to World Cup 98"
+
+    def test_a_revision_stays_because_it_identifies_the_dump(self):
+        found = catalogue.printable_title("San Francisco Rush (USA) (Rev 1)")
+
+        assert "Rev 1" in found
+
+    def test_the_revision_loses_only_its_brackets(self):
+        assert catalogue.printable_title("Wave Race 64 (USA) (Rev 1)") == "Wave Race 64 Rev 1"
+
+    def test_a_qualifier_that_names_a_different_game_stays(self):
+        """Master Quest and the GameCube disc are separate releases, not noise."""
+        found = catalogue.printable_title(
+            "Legend of Zelda, The - Ocarina of Time - Master Quest (USA) (GameCube)"
+        )
+
+        assert "Master Quest" in found
+        assert "GameCube" in found
+
+    def test_a_title_with_nothing_to_trim_is_unchanged(self):
+        assert catalogue.printable_title("Body Harvest") == "Body Harvest"
+
+    def test_it_leaves_no_double_spaces_behind(self):
+        assert "  " not in catalogue.printable_title("Mario Kart 64 (USA) (Rev 1)")
+
+    def test_the_trimmed_title_reaches_the_document(self):
+        rows = [row(title="Super Mario 64 (USA)")]
+
+        out = catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+        assert "Super Mario 64" in out
+        assert "(USA)" not in out

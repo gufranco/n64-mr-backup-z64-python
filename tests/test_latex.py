@@ -221,3 +221,31 @@ class TestATableMustFitThePage:
     def test_it_refuses_a_unit_it_cannot_measure(self):
         with pytest.raises(ValueError, match="unknown column width unit"):
             latex.table_width_mm(["3ex"])
+
+
+class TestCellsAreNotJustified:
+    """A bare p column justifies, and justifying a narrow one stretches the word
+    spaces to fill the line. That produced 56 lines at badness 10000, the worst
+    TeX reports, in a document made almost entirely of narrow columns."""
+
+    def test_a_left_column_is_ragged_right(self):
+        out = latex.longtable(["A"], [["x"]], widths=["40mm"])
+
+        assert "RaggedRight" in out
+
+    def test_a_right_column_is_ragged_left(self):
+        out = latex.longtable(["A"], [["1"]], widths=["40mm"], align=["r"])
+
+        assert "RaggedLeft" in out
+
+    def test_no_column_is_left_to_justify(self):
+        out = latex.longtable(["A", "B"], [["x", "1"]], widths=["40mm", "20mm"], align=["l", "r"])
+        spec = out[out.index("begin{longtable}") : out.index("toprule")]
+
+        assert spec.count("p{") == spec.count("Ragged")
+
+    def test_the_cell_can_still_hold_a_paragraph(self):
+        """arraybackslash restores the row separator that ragged2e overrides."""
+        out = latex.longtable(["A"], [["x"]], widths=["40mm"])
+
+        assert "arraybackslash" in out

@@ -11,6 +11,7 @@ the document says so plainly rather than assuming a shelf it cannot see.
 from __future__ import annotations
 
 import collections
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,6 +33,26 @@ NEEDS_FILE = "+file"
 
 
 VIDEO_UNREAD = "not read"
+
+REGION_OR_LANGUAGES = re.compile(r"\s*\((?:USA|USA, Europe|World|Europe|Japan|En[ ,\w]*)\)")
+REVISION = re.compile(r"\s*\((Rev \d+)\)")
+RUN_OF_SPACES = re.compile(r"\s{2,}")
+
+
+def printable_title(title: str) -> str:
+    """A game's name with the parts every row repeats taken out.
+
+    The catalogue is USA-only and says so at the top, so (USA) on all 292 rows
+    is six characters carrying nothing. Language lists go the same way: the unit
+    does not pick a language, so the reader cannot act on the list.
+
+    A revision keeps its text and loses its brackets, because it distinguishes
+    two dumps of the same game and the reader may need it. Anything else in
+    brackets stays: Master Quest and the GameCube disc are different releases.
+    """
+    trimmed = REGION_OR_LANGUAGES.sub("", title)
+    trimmed = REVISION.sub(r" \1", trimmed)
+    return RUN_OF_SPACES.sub(" ", trimmed).strip()
 
 
 @dataclass(frozen=True)
@@ -216,7 +237,10 @@ def build(
         body.append(
             latex.longtable(
                 ["Game", "What it needs"],
-                [[r.title, r.requirement] for r in sorted(affected, key=lambda x: x.title)],
+                [
+                    [printable_title(r.title), r.requirement]
+                    for r in sorted(affected, key=lambda x: x.title)
+                ],
                 widths=["55mm", "105mm"],
             )
         )
@@ -250,7 +274,7 @@ def build(
                 ["Game", "CIC", "Save", "Status", "Video"],
                 [
                     [
-                        r.title,
+                        printable_title(r.title),
                         r.cic,
                         rules.save_label(r.save),
                         status_label(r.status, needs_file=r.needs_file),
