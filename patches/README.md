@@ -302,7 +302,7 @@ a game run on the unit, not for the games.
 | `banjo.hdr` | ships beside its patch |
 | `banjo.zps` | scene crack release, no author or licence stated |
 | `dk64-usa.ram` | Unofficial Z64 Patch File v3.0U |
-| `dx-btusc.aps` | Standalone dextrose release dx-btusc |
+| `dx-btusc.aps` | Standalone Dextrose release dx-btusc |
 | `jfg-usa.ram` | Unofficial Z64 Patch File v3.0U |
 | `kgsgood.aps` | Unofficial Z64 Patch File v3.0U, extra folder |
 | `nba_cs.hdr` | ships beside its patch |
