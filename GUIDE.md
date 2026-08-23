@@ -153,8 +153,19 @@ the files sit at the top level of the disk.
 ### If you chose disk images
 
 Each image is one whole disk as a single file. Writing one replaces everything on
-that Zip disk. On macOS and Linux the repository includes a helper script,
-`write-zip.sh`. On Windows, use a disk-imaging tool.
+that Zip disk. The program offers to do it for you at the end, one disk at a
+time, and you can also do a single one with:
+
+```
+z64kit write DISK-IMAGE-FILE DEVICE
+```
+
+The device is `disk8` on a Mac and `sdb` on Linux. `z64kit doctor` and your
+system's disk tool will tell you which. Windows is not supported.
+
+The disk is never mounted, so nothing is added to it. Every part of it is read
+back and compared against what was written, and if the drive starts failing or
+slows to a crawl the write stops at once and the disk is ejected.
 
 > **Careful.** Writing an image erases the target disk completely. Check twice
 > that you have named the Zip drive and not your hard disk. This is the one step

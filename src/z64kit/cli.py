@@ -890,6 +890,14 @@ def cmd_write(args: argparse.Namespace) -> int:
         print(f"{source} cannot be written: {error}")
         return 1
 
+    body = made.body
+    total = made.size
+    if getattr(args, "full", False):
+        whole = bytearray(source.read_bytes())
+        whole[: len(body)] = body
+        body = bytes(whole)
+        total = len(body)
+
     if made.highest_cluster < payload.FIRST_DATA_CLUSTER and not args.empty:
         print(f"{source} holds no files, so writing it would leave a blank disk.")
         print("Pass --empty if that is what you want.")
@@ -909,8 +917,8 @@ def cmd_write(args: argparse.Namespace) -> int:
     scratch = Path(args.output or "") if args.output else None
     holder = scratch or Path(f"{source}.payload")
     try:
-        holder.write_bytes(made.body)
-        written = burn.write_image(holder, device, total_bytes=made.size, say=print)
+        holder.write_bytes(body)
+        written = burn.write_image(holder, device, total_bytes=total, say=print)
     except burn.WriteFailedError as error:
         print("")
         print(f"STOPPED: {error}")
@@ -1139,6 +1147,11 @@ def build_parser() -> argparse.ArgumentParser:
     wr.add_argument("device", help="the device node, for example disk8")
     wr.add_argument("-y", "--yes", action="store_true", help="skip the confirmation")
     wr.add_argument("--empty", action="store_true", help="allow an image holding no files")
+    wr.add_argument(
+        "--full",
+        action="store_true",
+        help="write the whole image rather than only the part holding data",
+    )
     wr.add_argument("--output", default=None, help="where to stage the payload")
     wr.add_argument(
         "--serial",

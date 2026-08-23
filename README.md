@@ -177,6 +177,7 @@ three different fixes, and only the first two need a new file.
 | Tool | Version | Notes |
 |:-----|:--------|:------|
 | Python | >= 3.11 | Named in [`pyproject.toml`](pyproject.toml). No runtime dependencies |
+| macOS or Linux | any | Windows is not supported. Writing a disk needs `diskutil` or `lsblk` and `eject` |
 | tectonic | any | Optional. Only for PDF output; the `.tex` is always written |
 
 ### Install

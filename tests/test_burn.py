@@ -18,7 +18,9 @@ them.
 
 from __future__ import annotations
 
+import ast
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -48,6 +50,8 @@ def device(**over):
         "removable": True,
         "external": True,
         "virtual": False,
+        "block": "/dev/disk8",
+        "raw": "/dev/rdisk8",
     }
     base.update(over)
     return burn.Device(**base)
@@ -55,33 +59,33 @@ def device(**over):
 
 class TestReadingTheDevice:
     def test_it_reads_the_size(self):
-        assert burn.parse_device("disk8", DISKUTIL).size == ZIP100
+        assert burn.parse_macos("disk8", DISKUTIL).size == ZIP100
 
     def test_it_reads_the_media_name(self):
-        assert burn.parse_device("disk8", DISKUTIL).media == "ZIP 100"
+        assert burn.parse_macos("disk8", DISKUTIL).media == "ZIP 100"
 
     def test_it_reads_removability(self):
-        assert burn.parse_device("disk8", DISKUTIL).removable is True
+        assert burn.parse_macos("disk8", DISKUTIL).removable is True
 
     def test_it_reads_that_the_device_is_external(self):
-        assert burn.parse_device("disk8", DISKUTIL).external is True
+        assert burn.parse_macos("disk8", DISKUTIL).external is True
 
     def test_it_reads_that_the_device_is_not_virtual(self):
-        assert burn.parse_device("disk8", DISKUTIL).virtual is False
+        assert burn.parse_macos("disk8", DISKUTIL).virtual is False
 
     def test_an_internal_disk_is_not_external(self):
         text = DISKUTIL.replace("External", "Internal")
 
-        assert burn.parse_device("disk8", text).external is False
+        assert burn.parse_macos("disk8", text).external is False
 
     def test_fixed_media_is_not_removable(self):
         text = DISKUTIL.replace("Removable Media:           Removable", "Removable Media: Fixed")
 
-        assert burn.parse_device("disk8", text).removable is False
+        assert burn.parse_macos("disk8", text).removable is False
 
     def test_output_with_no_size_is_refused(self):
         with pytest.raises(burn.DeviceError, match="size"):
-            burn.parse_device("disk8", "   Device Node: /dev/disk8\n")
+            burn.parse_macos("disk8", "   Device Node: /dev/disk8\n")
 
 
 class TestRefusingToWrite:
@@ -390,3 +394,153 @@ class TestWritingADisk:
         )
 
         assert any("never mounted" in line for line in said)
+
+
+LSBLK = """{
+   "blockdevices": [
+      {"name":"sdb","size":100663296,"rm":true,"model":"ZIP 100","tran":"usb","type":"disk"}
+   ]
+}"""
+
+LSBLK_OLD_STRINGS = """{
+   "blockdevices": [
+      {"name":"sdb","size":"100663296","rm":"1","model":"ZIP 100  ","tran":"usb","type":"disk"}
+   ]
+}"""
+
+
+class TestReadingALinuxDevice:
+    """util-linux changed these fields from strings to real JSON types, and both
+    shapes are still in the wild, so the parser reads either."""
+
+    def test_it_reads_the_size(self):
+        assert burn.parse_linux("sdb", LSBLK).size == ZIP100
+
+    def test_it_reads_a_size_given_as_a_string(self):
+        assert burn.parse_linux("sdb", LSBLK_OLD_STRINGS).size == ZIP100
+
+    def test_it_reads_the_model_as_the_media_name(self):
+        assert burn.parse_linux("sdb", LSBLK).media == "ZIP 100"
+
+    def test_it_trims_the_padding_older_lsblk_leaves_on_the_model(self):
+        assert burn.parse_linux("sdb", LSBLK_OLD_STRINGS).media == "ZIP 100"
+
+    def test_it_reads_removability(self):
+        assert burn.parse_linux("sdb", LSBLK).removable is True
+
+    def test_it_reads_removability_given_as_a_string(self):
+        assert burn.parse_linux("sdb", LSBLK_OLD_STRINGS).removable is True
+
+    def test_a_fixed_disk_is_not_removable(self):
+        text = LSBLK.replace('"rm":true', '"rm":false')
+
+        assert burn.parse_linux("sdb", text).removable is False
+
+    def test_usb_counts_as_external(self):
+        assert burn.parse_linux("sdb", LSBLK).external is True
+
+    def test_removable_media_counts_as_external_whatever_the_transport(self):
+        """An internal ATAPI Zip is still not the machine's fixed storage, and
+        refusing it would block the drive this tool exists for."""
+        text = LSBLK.replace('"tran":"usb"', '"tran":"ata"')
+
+        assert burn.parse_linux("sdb", text).external is True
+
+    def test_a_fixed_sata_disk_is_not_external(self):
+        text = LSBLK.replace('"rm":true', '"rm":false').replace('"tran":"usb"', '"tran":"sata"')
+
+        assert burn.parse_linux("sdb", text).external is False
+
+    def test_nothing_on_linux_is_reported_as_virtual(self):
+        assert burn.parse_linux("sdb", LSBLK).virtual is False
+
+    def test_the_block_and_raw_nodes_are_the_same(self):
+        """Linux has no separate character device. Writing to the block device
+        does not mount it, which is the property that matters."""
+        found = burn.parse_linux("sdb", LSBLK)
+
+        assert found.block == "/dev/sdb"
+        assert found.raw == "/dev/sdb"
+
+    def test_a_partition_rather_than_a_whole_disk_is_refused(self):
+        text = LSBLK.replace('"type":"disk"', '"type":"part"')
+
+        with pytest.raises(burn.DeviceError, match="whole disk"):
+            burn.parse_linux("sdb", text)
+
+    def test_output_naming_no_device_is_refused(self):
+        with pytest.raises(burn.DeviceError, match="not report"):
+            burn.parse_linux("sdb", '{"blockdevices": []}')
+
+    def test_output_that_is_not_json_is_refused(self):
+        with pytest.raises(burn.DeviceError, match="could not be read"):
+            burn.parse_linux("sdb", "sdb 100663296 1 disk")
+
+    def test_a_linux_device_faces_the_same_refusals(self):
+        found = burn.parse_linux("sdb", LSBLK)
+
+        assert burn.refusals(found, ZIP100) == ()
+
+    def test_a_wrong_sized_linux_device_is_refused(self):
+        text = LSBLK.replace("100663296", "500107862016")
+
+        assert burn.refusals(burn.parse_linux("sdb", text), ZIP100)
+
+
+class TestTheCommandsMatchThePlatform:
+    """The write path is identical on both; only the words for unmount and eject
+    differ, so they are the only thing that branches."""
+
+    def test_macos_unmounts_the_whole_disk(self, monkeypatch):
+        monkeypatch.setattr(burn.sys, "platform", "darwin")
+
+        assert burn.unmount_command(device()) == [
+            "diskutil",
+            "unmountDisk",
+            "force",
+            "/dev/disk8",
+        ]
+
+    def test_linux_detaches_every_filesystem_on_the_disk(self, monkeypatch):
+        """Linux mounts partitions, not disks, so unmounting the disk alone
+        would leave sdb1 mounted and the write would fight it."""
+        monkeypatch.setattr(burn.sys, "platform", "linux")
+
+        assert "--all-targets" in burn.unmount_command(device())
+
+    def test_macos_ejects_with_diskutil(self, monkeypatch):
+        monkeypatch.setattr(burn.sys, "platform", "darwin")
+
+        assert burn.eject_command(device())[0] == "diskutil"
+
+    def test_linux_ejects_with_eject(self, monkeypatch):
+        monkeypatch.setattr(burn.sys, "platform", "linux")
+
+        assert burn.eject_command(device()) == ["eject", "/dev/disk8"]
+
+    def test_both_name_the_block_device_never_the_raw_one(self, monkeypatch):
+        """diskutil and eject operate on the disk, not on the transfer node."""
+        for platform in ("darwin", "linux"):
+            monkeypatch.setattr(burn.sys, "platform", platform)
+            assert burn.eject_command(device())[-1] == "/dev/disk8"
+            assert burn.unmount_command(device())[-1] == "/dev/disk8"
+
+    def test_the_write_path_does_not_branch_on_platform(self):
+        """Only the two device commands differ. If the transfer branched as well
+        there would be a second implementation to keep correct.
+
+        Read from the syntax tree with the docstring dropped, because the prose
+        mentions the tools it deliberately does not name in code.
+        """
+        module = ast.parse(Path(burn.__file__).read_text(encoding="utf-8"))
+        function = next(
+            node
+            for node in ast.walk(module)
+            if isinstance(node, ast.FunctionDef) and node.name == "write_image"
+        )
+        body = function.body[1:] if ast.get_docstring(function) else function.body
+        code = "\n".join(ast.dump(statement) for statement in body)
+
+        assert "on_macos" not in code
+        assert "diskutil" not in code
+        assert "lsblk" not in code

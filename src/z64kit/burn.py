@@ -22,9 +22,11 @@ tested without a drive.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
+import sys
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -36,6 +38,7 @@ SLOW_FACTOR = 6
 WARMUP_CHUNKS = 3
 
 SIZE_IN_BYTES = re.compile(r"Disk Size:.*?\((\d+) Bytes\)")
+EXTERNAL_TRANSPORTS = frozenset({"usb", "ieee1394", "fw", "firewire"})
 
 
 class DeviceError(ValueError):
@@ -48,21 +51,23 @@ class WriteFailedError(RuntimeError):
 
 @dataclass(frozen=True)
 class Device:
+    """A whole disk, described the same way whichever system reported it.
+
+    `raw` is the node every transfer goes through. macOS has a character device
+    that reads and writes without mounting; Linux has no separate node, and its
+    block device does not mount by being written to, so there `raw` and `block`
+    are the same. Both are set by whichever reader built this, rather than
+    derived here, so the difference lives in one place.
+    """
+
     node: str
     size: int
     media: str
     removable: bool
     external: bool
     virtual: bool
-
-    @property
-    def block(self) -> str:
-        return f"/dev/{self.node}"
-
-    @property
-    def raw(self) -> str:
-        """The character device, which reads and writes without mounting."""
-        return f"/dev/r{self.node}"
+    block: str
+    raw: str
 
 
 def _field(text: str, label: str) -> str:
@@ -73,7 +78,7 @@ def _field(text: str, label: str) -> str:
     return ""
 
 
-def parse_device(node: str, text: str) -> Device:
+def parse_macos(node: str, text: str) -> Device:
     """Read what `diskutil info` says about a device."""
     size = SIZE_IN_BYTES.search(text)
     if not size:
@@ -85,6 +90,45 @@ def parse_device(node: str, text: str) -> Device:
         removable="removable" in _field(text, "Removable Media").lower(),
         external=_field(text, "Device Location").lower() == "external",
         virtual=_field(text, "Virtual").lower() == "yes",
+        block=f"/dev/{node}",
+        raw=f"/dev/r{node}",
+    )
+
+
+def _truthy(value: object) -> bool:
+    return value in (True, 1, "1", "true", "True")
+
+
+def parse_linux(node: str, text: str) -> Device:
+    """Read what `lsblk --bytes --json` says about a device.
+
+    util-linux moved these fields from strings to real JSON types, and both
+    shapes are still shipping, so either is accepted.
+    """
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise DeviceError(f"lsblk output for {node} could not be read: {error}") from error
+
+    listed = payload.get("blockdevices") or []
+    if not listed:
+        raise DeviceError(f"lsblk did not report a device for {node}")
+
+    entry = listed[0]
+    if str(entry.get("type", "disk")).lower() != "disk":
+        raise DeviceError(f"{node} is not a whole disk, it is a {entry.get('type')}")
+
+    removable = _truthy(entry.get("rm"))
+    transport = str(entry.get("tran") or "").lower()
+    return Device(
+        node=node,
+        size=int(entry.get("size") or 0),
+        media=str(entry.get("model") or "").strip(),
+        removable=removable,
+        external=removable or transport in EXTERNAL_TRANSPORTS,
+        virtual=False,
+        block=f"/dev/{node}",
+        raw=f"/dev/{node}",
     )
 
 
@@ -171,21 +215,62 @@ def _run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[by
     return subprocess.run(command, capture_output=True, check=False, **kwargs)  # type: ignore[call-overload,no-any-return]
 
 
+def on_macos() -> bool:
+    return sys.platform == "darwin"
+
+
 def read_device(node: str) -> Device:
-    if shutil.which("diskutil") is None:
-        raise DeviceError("diskutil was not found, so this only runs on macOS")
-    done = _run(["diskutil", "info", node])
+    """Ask the system about a device, through whichever tool it has."""
+    if on_macos():
+        if shutil.which("diskutil") is None:
+            raise DeviceError("diskutil was not found, so this device cannot be inspected")
+        done = _run(["diskutil", "info", node])
+        if done.returncode != 0:
+            raise DeviceError(f"no such device: {node}")
+        return parse_macos(node, done.stdout.decode("utf-8", "replace"))
+
+    if shutil.which("lsblk") is None:
+        raise DeviceError("lsblk was not found. Install util-linux to write disks")
+    done = _run(
+        [
+            "lsblk",
+            "--bytes",
+            "--json",
+            "--nodeps",
+            "-o",
+            "NAME,SIZE,RM,MODEL,TRAN,TYPE",
+            f"/dev/{node}",
+        ]
+    )
     if done.returncode != 0:
         raise DeviceError(f"no such device: {node}")
-    return parse_device(node, done.stdout.decode("utf-8", "replace"))
+    return parse_linux(node, done.stdout.decode("utf-8", "replace"))
+
+
+def unmount_command(device: Device) -> list[str]:
+    """Take every filesystem on the disk offline before touching it.
+
+    macOS unmounts the whole disk in one call. Linux mounts partitions rather
+    than disks, so umount is pointed at the device and told to detach whatever
+    hangs off it.
+    """
+    if on_macos():
+        return ["diskutil", "unmountDisk", "force", device.block]
+    return ["umount", "--all-targets", "--quiet", device.block]
+
+
+def eject_command(device: Device) -> list[str]:
+    if on_macos():
+        return ["diskutil", "eject", device.block]
+    return ["eject", device.block]
 
 
 def unmount(device: Device) -> None:
-    _run(["diskutil", "unmountDisk", "force", device.block])
+    _run(privileged(unmount_command(device)))
 
 
 def eject(device: Device) -> bool:
-    return _run(["diskutil", "eject", device.block]).returncode == 0
+    return _run(privileged(eject_command(device))).returncode == 0
 
 
 @dataclass(frozen=True)
@@ -220,10 +305,10 @@ def write_image(
     spans = list(chunks(total=total_bytes, size=chunk_bytes))
 
     def stop(reason: str) -> None:
-        execute(privileged(["diskutil", "eject", device.block]))
+        execute(privileged(eject_command(device)))
         raise WriteFailedError(reason)
 
-    execute(privileged(["diskutil", "unmountDisk", "force", device.block]))
+    execute(privileged(unmount_command(device)))
     announce(f"writing     {len(spans)} chunks of {chunk_bytes // 1024 // 1024} MiB")
     started = time.monotonic()
     with payload.open("rb") as source:
@@ -253,7 +338,7 @@ def write_image(
                 stop(fault)
     elapsed = round(time.monotonic() - started)
 
-    execute(privileged(["diskutil", "unmountDisk", "force", device.block]))
+    execute(privileged(unmount_command(device)))
     announce(f"verifying   reading back through {device.raw}, never mounted")
     watching.reset()
     with payload.open("rb") as source:
@@ -280,5 +365,5 @@ def write_image(
                     f"what it was given."
                 )
 
-    ejected = execute(privileged(["diskutil", "eject", device.block])).returncode == 0
+    ejected = execute(privileged(eject_command(device))).returncode == 0
     return Written(chunks=len(spans), seconds=elapsed, ejected=ejected)
