@@ -315,8 +315,6 @@ patches/          # where you put the files you supply. Generated README, no pay
 | Suite | Command | Covers |
 |:------|:--------|:-------|
 | Everything | `pytest` | The whole suite, with the coverage gate at 95% |
-| Skip the ones needing game data | `pytest -m "not artifacts"` | Explicit form of what happens anyway when no collection is present |
-| Only the ones needing game data | `pytest -m artifacts` | Byte-for-byte image reproduction. Skips unless `Z64KIT_LIBRARY` and `Z64KIT_GOLDEN` resolve |
 | Lint and format | `ruff check src tests && ruff format --check src tests` | Style and static analysis |
 | Types | `mypy` | Strict, with every optional error class the version offers |
 

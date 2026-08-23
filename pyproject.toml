@@ -52,7 +52,6 @@ exclude = ["artifacts", "specs", "**/*.z64", "**/*.v64", "**/*.n64", "**/*.aps",
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers --strict-config"
-markers = ["artifacts: requires user supplied artifacts, skipped by default"]
 
 [tool.coverage.run]
 branch = true
