@@ -249,3 +249,61 @@ class TestCellsAreNotJustified:
         out = latex.longtable(["A"], [["x"]], widths=["40mm"])
 
         assert "arraybackslash" in out
+
+
+class TestATableCarriesItsHeadingAcrossAPageBreak:
+    """A disk heading sat above its table as a separate paragraph. When the break
+    landed after the first row, page seven showed the heading with one game and
+    page eight showed six games belonging to no disk the reader could name.
+    """
+
+    def test_the_heading_goes_inside_the_table(self):
+        out = latex.longtable(
+            ["A"], [["x"]], widths=["40mm"], heading="Zip Disk 35", aside="7 games"
+        )
+
+        assert out.index("Zip Disk 35") > out.index("begin{longtable}")
+
+    def test_the_heading_shows_above_the_first_page_of_rows(self):
+        out = latex.longtable(["A"], [["x"]], widths=["40mm"], heading="Zip Disk 35")
+        first = out[: out.index("endfirsthead")]
+
+        assert "Zip Disk 35" in first
+
+    def test_a_continuation_says_which_table_it_belongs_to(self):
+        out = latex.longtable(["A"], [["x"]], widths=["40mm"], heading="Zip Disk 35")
+        repeated = out[out.index("endfirsthead") : out.index("endhead")]
+
+        assert "Zip Disk 35" in repeated
+
+    def test_a_continuation_is_marked_as_one(self):
+        out = latex.longtable(["A"], [["x"]], widths=["40mm"], heading="Zip Disk 35")
+        repeated = out[out.index("endfirsthead") : out.index("endhead")]
+
+        assert "continued" in repeated
+
+    def test_the_first_page_is_not_marked_as_a_continuation(self):
+        out = latex.longtable(["A"], [["x"]], widths=["40mm"], heading="Zip Disk 35")
+        first = out[: out.index("endfirsthead")]
+
+        assert "continued" not in first
+
+    def test_the_aside_rides_with_the_heading(self):
+        out = latex.longtable(
+            ["A"], [["x"]], widths=["40mm"], heading="Zip Disk 35", aside="7 games, 92 MiB"
+        )
+
+        assert "7 games, 92 MiB" in out
+
+    def test_the_heading_spans_every_column(self):
+        out = latex.longtable(
+            ["A", "B", "C"], [["x", "y", "z"]], widths=["20mm"] * 3, heading="Zip Disk 35"
+        )
+
+        assert "multicolumn{3}" in out
+
+    def test_a_table_without_a_heading_is_unchanged(self):
+        out = latex.longtable(["A"], [["x"]], widths=["40mm"])
+
+        assert "multicolumn" not in out
+        assert "continued" not in out

@@ -266,10 +266,6 @@ def build(
         on_disk = [r for r in rows if r.disk == disk]
         used = sum(r.mib for r in on_disk)
         body.append(
-            f"\\textbf{{{latex.escape(disk)}}} \\hfill "
-            f"{{\\footnotesize {len(on_disk)} games, {used} MiB}}\\\\[2pt]\n"
-        )
-        body.append(
             latex.longtable(
                 ["Game", "CIC", "Save", "Status", "Video"],
                 [
@@ -284,6 +280,8 @@ def build(
                 ],
                 widths=["68mm", "12mm", "22mm", "26mm", "42mm"],
                 align=["l", "l", "l", "l", "l"],
+                heading=disk,
+                aside=f"{len(on_disk)} games, {used} MiB",
             )
         )
 

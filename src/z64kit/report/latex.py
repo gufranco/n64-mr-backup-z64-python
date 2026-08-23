@@ -117,6 +117,8 @@ def longtable(
     widths: Sequence[str],
     align: Sequence[str] | None = None,
     caption: str = "",
+    heading: str = "",
+    aside: str = "",
 ) -> str:
     if len(headers) != len(widths):
         raise ValueError("one width is required per header")
@@ -140,6 +142,22 @@ def longtable(
         spec.append(f">{{\\{ragged}\\arraybackslash}}p{{{width}}}")
 
     head = " & ".join(f"\\footnotesize\\textbf{{{escape(h)}}}" for h in headers)
+
+    def banner(suffix: str) -> list[str]:
+        """A heading row inside the table, so it cannot be left on the page above.
+
+        As a paragraph before the table it could be separated from every row it
+        described, and a continuation carried no way to tell which table it was.
+        """
+        if not heading:
+            return []
+        trailing = f" {{\\footnotesize {escape(aside)}}}" if aside and not suffix else ""
+        marker = f" {{\\footnotesize {suffix}}}" if suffix else ""
+        return [
+            f"\\multicolumn{{{len(headers)}}}{{@{{}}l@{{}}}}"
+            f"{{\\textbf{{{escape(heading)}}}{marker}{trailing}}} \\\\[2pt]"
+        ]
+
     body = "".join(" & ".join(escape(cell) for cell in row) + " \\\\\n" for row in rows)
 
     parts = [
@@ -149,10 +167,12 @@ def longtable(
     if caption:
         parts.append(f"\\caption*{{{escape(caption)}}}\\\\")
     parts += [
+        *banner(""),
         "\\toprule",
         f"{head} \\\\",
         "\\midrule",
         "\\endfirsthead",
+        *banner("(continued)"),
         "\\toprule",
         f"{head} \\\\",
         "\\midrule",
