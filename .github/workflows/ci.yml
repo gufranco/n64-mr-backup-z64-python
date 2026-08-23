@@ -48,7 +48,7 @@ jobs:
           sudo apt-get install -y shellcheck
           shellcheck --severity=style --shell=bash scripts/*.sh write-zip.sh
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v5
         with:
