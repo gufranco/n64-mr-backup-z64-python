@@ -62,3 +62,28 @@ def rom_factory():
 @pytest.fixture
 def rom():
     return make_rom()
+
+
+NTSC_LAN1_CTRL = 0x0000324E
+
+
+def mode_entry(ctrl=NTSC_LAN1_CTRL, width=320, vsync=525, hsync=3093):
+    """A VI mode struct as libultra lays it out: type, then nine comRegs words.
+
+    Lives here rather than beside a vi test, because the video code moved to its
+    own package and the tests left behind still need a ROM that carries a table
+    the scanner will accept.
+    """
+    return struct.pack(
+        ">IIIIIIIIII",
+        0x00000001,
+        ctrl,
+        width,
+        0x03E52239,
+        vsync,
+        hsync,
+        0x0C150C15,
+        0x006C02EC,
+        0x00000200,
+        0x00000000,
+    )

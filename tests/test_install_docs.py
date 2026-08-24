@@ -1,13 +1,15 @@
-"""The install line in the documentation must not carry a version.
+"""The install instructions have to match how this project can actually be got.
 
-Both README.md and GUIDE.md pinned v1.0.2 while the released version was v1.1.1,
-which is what a hand-maintained version number does over time. They now point at
-`refs/tags/latest`, a tag the release job moves onto each release, so the line is
-correct without anyone editing it.
+It used to be installable from a source archive, and both documents carried that
+URL. Adopting a submodule ended that: `git archive`, which is what the Download
+ZIP button and the auto-generated release tarballs run, resolves one repository
+and stops. The archive holds the submodule directory empty and carries no git
+metadata, so `git submodule update --init` cannot repair that copy either.
 
-These tests hold that shape. A version-pinned archive URL reappearing in a document
-a reader is meant to copy from is the regression. What the release job must do to keep
-that tag correct lives in test_release_workflow.py.
+Nothing about that failure is visible to a maintainer, who clones, or to CI,
+which checks out recursively. It surfaces only for the person who clicked the
+button, and it surfaces as a broken project rather than as a wrong download. So
+the documents have to say so, and these tests are what keeps them saying it.
 
 Documents are keyed by their path relative to the repository root rather than by
 filename, because `patches/README.md` and `README.md` share a name.
@@ -23,7 +25,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 ARCHIVE_URL = re.compile(r"archive/refs/(tags|heads)/(?P<ref>[\w.\-]+)\.(zip|tar\.gz)")
-PINNED = re.compile(r"^v?\d+\.\d+")
 INSTALLED_FROM = ("README.md", "GUIDE.md")
 
 
@@ -43,31 +44,52 @@ def documents() -> dict[str, str]:
     return {name: (ROOT / name).read_text(encoding="utf-8") for name in tracked_markdown()}
 
 
-def archive_urls(text: str) -> set[str]:
-    return {found.group(0) for found in ARCHIVE_URL.finditer(text)}
-
-
-class TestTheInstallLineDoesNotCarryAVersion:
+class TestTheArchiveIsNotOfferedAnyMore:
     def test_it_covers_the_documents_a_reader_installs_from(self, documents):
         """Guards the guard: a glob that stopped matching would pass everything else."""
         for name in INSTALLED_FROM:
             assert name in documents
 
-    def test_no_document_pins_a_version_in_an_archive_url(self, documents):
+    def test_no_document_offers_an_archive_of_this_repository(self, documents):
         offenders = [
             f"{name}: {found.group(0)}"
             for name, text in documents.items()
             for found in ARCHIVE_URL.finditer(text)
-            if PINNED.match(found.group("ref"))
+            if "n64-mr-backup-z64-python" in text[max(0, found.start() - 120) : found.start()]
         ]
 
-        assert offenders == [], "a pinned archive URL goes stale on the next release"
+        assert offenders == [], "an archive of a repository with a submodule installs nothing"
 
-    def test_the_documents_a_reader_installs_from_use_the_moving_tag(self, documents):
+    def test_both_documents_tell_the_reader_to_clone_recursively(self, documents):
         for name in INSTALLED_FROM:
-            assert "archive/refs/tags/latest.zip" in documents[name]
+            assert "--recurse-submodules" in documents[name], name
 
-    def test_both_documents_offer_the_same_install_line(self, documents):
-        readme, guide = (archive_urls(documents[name]) for name in INSTALLED_FROM)
+    def test_both_documents_say_the_archive_cannot_work(self, documents):
+        for name in INSTALLED_FROM:
+            text = documents[name].lower()
+            assert "download zip" in text, name
 
-        assert readme == guide
+
+class TestTheSubmoduleIsDeclared:
+    def test_the_repository_declares_it(self):
+        assert (ROOT / ".gitmodules").is_file()
+
+    def test_the_path_the_documents_name_is_the_path_git_uses(self):
+        declared = (ROOT / ".gitmodules").read_text(encoding="utf-8")
+
+        assert "path = n64-video-interface-python" in declared
+
+    def test_it_is_cloned_over_https_so_no_key_is_needed(self):
+        declared = (ROOT / ".gitmodules").read_text(encoding="utf-8")
+
+        assert "url = https://" in declared
+
+    def test_the_build_reaches_into_it(self):
+        manifest = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+        assert "n64-video-interface-python/src/n64_video_interface" in manifest
+
+    def test_the_test_run_needs_no_environment(self):
+        manifest = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+        assert 'pythonpath = ["src", "n64-video-interface-python/src"]' in manifest

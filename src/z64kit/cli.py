@@ -28,6 +28,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from n64_video_interface import header, vi
+
 from . import (
     aps,
     artifacts,
@@ -42,13 +44,11 @@ from . import (
     patchdb,
     prompts,
     scan,
-    vi,
     videopatch,
     wizard,
 )
 from .fat import image, payload, writer
 from .report import catalogue, hardware, latex, render, tiers
-from .rom import header
 
 
 def _today() -> str:

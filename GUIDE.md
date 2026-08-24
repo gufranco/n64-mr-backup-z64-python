@@ -55,20 +55,40 @@ On Windows, type `python` instead of `python3` everywhere in this guide.
 
 ## Step 2: install the program
 
-Copy this line into the terminal and press Enter:
+This one needs `git`. Type `git --version` and press Enter. If that prints a
+version, carry on. If it says `command not found`, install git first: on a Mac
+type `xcode-select --install`, on Ubuntu or Debian `sudo apt install git`.
+
+Copy these five lines into the terminal, one at a time, pressing Enter after each:
 
 ```
-pip install https://github.com/gufranco/n64-mr-backup-z64-python/archive/refs/tags/latest.zip
+git clone --recurse-submodules https://github.com/gufranco/n64-mr-backup-z64-python.git
+cd n64-mr-backup-z64-python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-That is the whole install. It downloads the newest released version straight from
-the project page and sets it up.
+The first line downloads the program. `--recurse-submodules` is not optional:
+part of the program lives in a second project, and without that word you get an
+empty folder where it should be.
+
+The Download ZIP button on the project page does not work for this program, for
+the same reason. It cannot carry that second project. If you already downloaded
+a ZIP, delete it and use the lines above instead.
+
+The last two lines put the program in a private folder of its own so it cannot
+disturb anything else on your computer. Every new terminal window needs
+`source .venv/bin/activate` again before `z64kit` will be found.
+
+To upgrade later:
+
+```
+git pull --recurse-submodules
+```
 
 This program comes from that page and nowhere else, so anything claiming to be it
 somewhere else did not come from here.
-
-To upgrade later, run that same line again. It always fetches the newest release,
-so there is no version number to look up and nothing to change.
 
 Then check it worked:
 

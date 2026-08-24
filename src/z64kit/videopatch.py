@@ -21,7 +21,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import aps, merge, vi
+from n64_video_interface import vi
+
+from . import aps, merge
 
 VIDEO_ONLY = "video_only"
 MERGED = "merged"

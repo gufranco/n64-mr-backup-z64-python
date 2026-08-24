@@ -1,0 +1,3 @@
+[submodule "n64-video-interface-python"]
+	path = n64-video-interface-python
+	url = https://github.com/gufranco/n64-video-interface-python.git

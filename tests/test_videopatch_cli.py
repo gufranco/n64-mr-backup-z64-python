@@ -15,11 +15,11 @@ from __future__ import annotations
 import zipfile
 
 import pytest
-from tests.conftest import make_rom
+from n64_video_interface import vi
+from tests.conftest import make_rom, mode_entry
 from tests.test_merge import save_patch_for
-from tests.test_vi import mode_entry
 
-from z64kit import aps, artifacts, cli, patchdb, vi
+from z64kit import aps, artifacts, cli, patchdb
 
 
 def rom_variant(marker: int, ctrl: int = 0x0000311E) -> bytes:
@@ -101,7 +101,7 @@ class TestWhatLandsInTheFolder:
         assert emitted.exists()
 
     def test_that_patch_turns_the_video_settings_off(self, out, collection):
-        from z64kit import vi
+        from n64_video_interface import vi
 
         rom = (collection / "alpha.z64").read_bytes()
         crc1, crc2 = aps.target_checksums(rom)
@@ -112,7 +112,7 @@ class TestWhatLandsInTheFolder:
         assert vi.audit(result).antialiasing_on == 0
 
     def test_a_mergeable_patch_is_replaced_in_place(self, out, library, collection):
-        from z64kit import vi
+        from n64_video_interface import vi
 
         rom = (collection / "beta.z64").read_bytes()
         before = (library / "beta-fix.aps").read_bytes()
@@ -173,7 +173,7 @@ class TestTheDatabaseRoute:
         return folder
 
     def test_the_merged_patch_replaces_the_database_entry(self, collection, library, tmp_path):
-        from z64kit import vi
+        from n64_video_interface import vi
 
         target = tmp_path / "out"
         run(collection, as_patches=True, patches=library, output=target, apply=True)
@@ -268,7 +268,7 @@ class TestAPatchCarriedByBothRoutes:
         return target
 
     def test_both_copies_carry_the_merge(self, out, collection):
-        from z64kit import vi
+        from n64_video_interface import vi
 
         rom = (collection / "beta.z64").read_bytes()
         members = patchdb.read((out / artifacts.PATCH_DATABASE).read_bytes())

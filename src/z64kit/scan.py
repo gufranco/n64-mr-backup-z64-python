@@ -17,8 +17,9 @@ import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from n64_video_interface import checksum, header
+
 from .compat import load_rules
-from .rom import checksum, header
 
 DEFAULT_DISK_PREFIX = "Zip Disk"
 

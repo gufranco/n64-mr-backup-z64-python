@@ -22,8 +22,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import aps, vi
-from .rom import checksum
+from n64_video_interface import checksum, vi
+
+from . import aps
 
 DESCRIPTION = "merged save fix and video settings"
 

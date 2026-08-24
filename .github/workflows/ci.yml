@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
       - uses: actions/setup-python@v7
         with:
@@ -66,6 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
       - uses: actions/setup-python@v7
         with:
@@ -80,6 +84,8 @@ jobs:
       # in pyproject.toml so a local run and this one agree.
       - name: Every annotation has to hold
         run: mypy
+        env:
+          MYPYPATH: n64-video-interface-python/src
 
   test:
     name: ${{ matrix.label }}, Python ${{ matrix.python }}
@@ -96,6 +102,8 @@ jobs:
           - { os: macos-latest, python: "3.13", label: macOS Apple silicon }
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
       - uses: actions/setup-python@v7
         with:
@@ -110,8 +118,6 @@ jobs:
       # collection. Tests that need those files carry a marker and skip.
       - name: Run the suite against nothing but the repository
         run: python -m pytest tests/ -q -p no:randomly
-        env:
-          PYTHONPATH: src
 
   platform:
     name: Installed on ${{ matrix.label }}
@@ -126,6 +132,8 @@ jobs:
           - { os: macos-latest, label: macOS Apple silicon, device: diskutil }
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
       - uses: actions/setup-python@v7
         with:
@@ -177,11 +185,34 @@ jobs:
               raise SystemExit(1)
           CHECK
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install the test tooling
+        run: python -m pip install --disable-pip-version-check pytest==8.3.4 pytest-cov==6.0.0
+
+      # The gate lives in pyproject.toml and nothing ran it, so the number was
+      # free to drift for as long as nobody looked. It is only a gate once a job
+      # fails on it.
+      - name: Coverage must clear the gate in pyproject.toml
+        run: python -m pytest tests/ -q -p no:randomly --cov --cov-report=term-missing
+
   distribution:
     name: The wheel carries no game data
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
       - uses: actions/setup-python@v7
         with:

@@ -3,11 +3,10 @@
 import struct
 
 import pytest
-from tests.conftest import make_rom
-from tests.test_vi import mode_entry
+from n64_video_interface import checksum, vi
+from tests.conftest import make_rom, mode_entry
 
-from z64kit import aps, merge, vi
-from z64kit.rom import checksum
+from z64kit import aps, merge
 
 
 def rom_with_table(ctrl=0x0000311E):

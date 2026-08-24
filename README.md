@@ -182,17 +182,11 @@ three different fixes, and only the first two need a new file.
 
 ### Install
 
-```bash
-pip install https://github.com/gufranco/n64-mr-backup-z64-python/archive/refs/tags/latest.zip
-```
-
-`latest` is a tag the release job moves onto each new release, so that line never carries a version
-and never goes stale. To pin one instead, swap `latest` for a version tag such as `v1.1.1`.
-
-Or clone it to work on it:
+The video patcher lives in [its own repository](https://github.com/gufranco/n64-video-interface-python)
+and arrives here as a submodule, so this has to be cloned rather than downloaded:
 
 ```bash
-git clone https://github.com/gufranco/n64-mr-backup-z64-python.git
+git clone --recurse-submodules https://github.com/gufranco/n64-mr-backup-z64-python.git
 cd n64-mr-backup-z64-python
 python3 -m venv .venv
 source .venv/bin/activate
@@ -200,13 +194,22 @@ pip install -e ".[dev]"
 z64kit
 ```
 
+> [!IMPORTANT]
+> The Download ZIP button and the auto-generated release archives cannot work. `git archive`
+> resolves one repository and stops, so the archive holds the submodule directory empty and carries
+> no git metadata, which means `git submodule update --init` cannot repair that copy either. There
+> is no recovery for it. Clone.
+
+`--recurse-submodules` is the part that matters. A clone without it leaves the same empty directory,
+and the fix from inside the tree is `git submodule update --init --recursive`.
+
 The virtual environment is not optional on a system Python. Homebrew, Debian, Ubuntu and Fedora
 all ship one marked externally managed, where `pip install` stops with
 `error: externally-managed-environment` and installs nothing. `z64kit` stays on the path for as
 long as that environment is active, so a new shell needs `source .venv/bin/activate` again.
 
-Without installing anything, `PYTHONPATH=src python3 -m z64kit` runs the same command line from
-the checkout and takes the same arguments.
+Without installing anything, `python3 -m z64kit` runs the same command line from the checkout and
+takes the same arguments. `pytest` needs no environment either: the paths are in `pyproject.toml`.
 
 > [!NOTE]
 > Every release lives on this repository's [releases page](https://github.com/gufranco/n64-mr-backup-z64-python/releases)

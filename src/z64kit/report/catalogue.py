@@ -310,7 +310,7 @@ def video_for(game: Game) -> Video | None:
     rather than as clean, because claiming a game needs no video patch when the
     question was never asked is the one wrong answer here.
     """
-    from ..vi import audit, find_dither_requests
+    from n64_video_interface.vi import audit, find_dither_requests
 
     try:
         rom = Path(game.path).read_bytes()

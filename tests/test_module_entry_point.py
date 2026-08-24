@@ -21,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
+VENDORED = ROOT / "n64-video-interface-python" / "src"
 
 
 def run(*args: str) -> subprocess.CompletedProcess[str]:
@@ -33,7 +34,7 @@ def run_module(module: str, *args: str) -> subprocess.CompletedProcess[str]:
         cwd=ROOT,
         capture_output=True,
         text=True,
-        env={**os.environ, "PYTHONPATH": str(SRC)},
+        env={**os.environ, "PYTHONPATH": os.pathsep.join([str(SRC), str(VENDORED)])},
         check=False,
     )
 

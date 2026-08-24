@@ -43,15 +43,24 @@ path = "src/z64kit/version.py"
 pattern = "VERSION = \"(?P<version>[^\"]+)\""
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/z64kit"]
+# The video patcher lives in its own repository and arrives here as a submodule,
+# so the wheel has to reach into it. A source archive of this repository carries
+# that directory empty, which is why the readme says a recursive clone is the
+# only way to get a working tree.
+packages = ["src/z64kit", "n64-video-interface-python/src/n64_video_interface"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/z64kit", "tests", "README.md", "LICENSE.txt", "pyproject.toml"]
+include = ["src/z64kit", "n64-video-interface-python/src/n64_video_interface", "tests", "README.md", "LICENSE.txt", "pyproject.toml"]
 exclude = ["artifacts", "specs", "**/*.z64", "**/*.v64", "**/*.n64", "**/*.aps", "**/*.ips", "**/*.img"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers --strict-config"
+# So `pytest` works from a clean checkout with no environment set up. The second
+# entry is the video patcher, which lives in its own repository and arrives as a
+# submodule, so a tree without `--recurse-submodules` fails here first and says
+# what is missing rather than failing later with an import nobody can place.
+pythonpath = ["src", "n64-video-interface-python/src"]
 
 [tool.coverage.run]
 branch = true
@@ -73,6 +82,7 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "R
 ignore = ["RUF001"]
 
 [tool.mypy]
+mypy_path = "n64-video-interface-python/src"
 # Strict, plus the optional error classes the version offers. This code decides
 # what lands on a disk and what a patch binds to, so a None or a width crossing a
 # boundary it should not is exactly the class of defect worth catching before the
