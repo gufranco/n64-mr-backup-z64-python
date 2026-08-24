@@ -65,7 +65,7 @@ class Database:
             return None
         best: tuple[int, Entry] | None = None
         for pattern, entry in self.id_patterns.items():
-            if not _matches(pattern, game_code):
+            if not matches(pattern, game_code):
                 continue
             weight = sum(1 for c in pattern if c != "_")
             if best is None or weight > best[0]:
@@ -79,7 +79,8 @@ class Database:
         return self.lookup_by_code(game_code)
 
 
-def _matches(pattern: str, code: str) -> bool:
+def matches(pattern: str, code: str) -> bool:
+    """Whether a game code satisfies a catalogue pattern, underscore as wildcard."""
     padded = code.ljust(len(pattern), "_")
     return all(p == "_" or p == c for p, c in zip(pattern, padded, strict=False))
 

@@ -151,3 +151,88 @@ class TestWildcardsInACode:
 
         for donor in donors.catalogued(catalogue, "eeprom2k"):
             assert "_" not in donor.code, donor
+
+
+class TestCleanTitles:
+    """The catalogue's names and No-Intro's names are not the same names.
+
+    The rest of the report takes its titles from the collection's own files,
+    which are No-Intro named. These tables took theirs from the catalogue, which
+    writes a subtitle after a colon, appends the Japanese title in brackets, and
+    keeps the accent in Pokemon. Two naming schemes in one document read as
+    errors, and half of them are.
+    """
+
+    def test_a_bracketed_alternate_title_is_dropped(self):
+        assert donors.clean_title("Jet Force Gemini [Star Twins]") == "Jet Force Gemini"
+
+    def test_a_colon_subtitle_becomes_a_dash(self):
+        assert donors.clean_title("GT 64: Championship Edition") == "GT 64 - Championship Edition"
+
+    def test_a_region_or_revision_suffix_is_dropped(self):
+        assert donors.clean_title("Pokemon Stadium (USA) (Rev 2)") == "Pokemon Stadium"
+
+    def test_an_accent_is_folded_to_ascii(self):
+        assert donors.clean_title("Pokémon Snap") == "Pokemon Snap"
+
+    def test_both_forms_of_noise_go_at_once(self):
+        assert (
+            donors.clean_title("Pokémon Stadium 2 [Pocket Monsters Stadium - Kin Gin] (USA)")
+            == "Pokemon Stadium 2"
+        )
+
+    def test_a_dash_already_in_the_title_survives(self):
+        assert donors.clean_title("City Tour GrandPrix - Zen Nihon GT Senshuken") == (
+            "City Tour GrandPrix - Zen Nihon GT Senshuken"
+        )
+
+    def test_a_clean_title_is_left_alone(self):
+        assert donors.clean_title("Mario Tennis") == "Mario Tennis"
+
+
+class TestACollectionSuppliesTheBetterName:
+    """The catalogue abbreviates. A No-Intro named file does not.
+
+    `Kirby 64` is the whole name the catalogue carries, and No-Intro calls the
+    same cartridge `Kirby 64 - The Crystal Shards`. Where the reader already owns
+    the game, their own filename is the more accurate source and is the one the
+    rest of the document is already using.
+
+    The link is the game code, matched by the same wildcard rule the catalogue
+    itself uses, so a name is never attached to a cartridge by resemblance.
+    """
+
+    @pytest.fixture
+    def catalogue(self) -> db.Database:
+        return db.parse(
+            "\n".join(
+                [
+                    "ID:NK4___ eeprom2k # Kirby 64",
+                    "ID:NB7___ eeprom2k # Banjo-Tooie [Banjo to Kazooie no Daiboken 2]",
+                ]
+            )
+        )
+
+    def test_a_matching_collection_name_wins(self, catalogue):
+        owned = {"NK4E": "Kirby 64 - The Crystal Shards"}
+
+        found = donors.catalogued(catalogue, "eeprom2k", owned=owned)
+
+        assert [d.title for d in found] == ["Banjo-Tooie", "Kirby 64 - The Crystal Shards"]
+
+    def test_a_game_not_owned_keeps_the_cleaned_catalogue_name(self, catalogue):
+        found = donors.catalogued(catalogue, "eeprom2k", owned={"NK4E": "Kirby 64 - Crystal"})
+
+        assert "Banjo-Tooie" in [d.title for d in found]
+
+    def test_a_code_matching_nothing_changes_no_name(self, catalogue):
+        plain = donors.catalogued(catalogue, "eeprom2k")
+
+        assert donors.catalogued(catalogue, "eeprom2k", owned={"NZZE": "Nope"}) == plain
+
+    def test_the_collection_name_is_cleaned_too(self, catalogue):
+        owned = {"NB7E": "Banjo-Tooie (USA) (Rev 1)"}
+
+        found = donors.catalogued(catalogue, "eeprom2k", owned=owned)
+
+        assert "Banjo-Tooie" in [d.title for d in found]

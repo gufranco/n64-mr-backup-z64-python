@@ -547,7 +547,7 @@ def _save_types(found: scan.Collection) -> dict[str, str]:
 
 
 def _purchasable_donors(
-    rules: compat.Rules, shopping: inventory.ShoppingList
+    rules: compat.Rules, shopping: inventory.ShoppingList, found: scan.Collection
 ) -> tuple[dict[str, tuple[donors.Donor, ...]], str]:
     """Every catalogued cartridge that would satisfy each donor still outstanding.
 
@@ -567,12 +567,13 @@ def _purchasable_donors(
         )
 
     catalogue = db.load_default()
+    owned = {game.game_code: Path(game.filename).stem for game in found.games if game.game_code}
     out: dict[str, tuple[donors.Donor, ...]] = {}
     for item in outstanding:
         tag = compat.donor_save_tag(rules, item.key)
         if not tag:
             continue
-        rows = donors.catalogued(catalogue, tag)
+        rows = donors.catalogued(catalogue, tag, owned=owned)
         if rows:
             out[item.key] = rows
     return out, ""
@@ -602,7 +603,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     # moment. The catalogue is read with the disks in hand; this one is read
     # before spending money on cartridges.
     shopping = inventory.shopping_list(_candidates(found, saves), held, rules)
-    purchasable, catalogue_note = _purchasable_donors(rules, shopping)
+    purchasable, catalogue_note = _purchasable_donors(rules, shopping, found)
     gear = hardware.build(
         shopping,
         rules=rules,
