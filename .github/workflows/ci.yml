@@ -117,7 +117,7 @@ jobs:
       # project cannot be worked on by anybody who does not already own a
       # collection. Tests that need those files carry a marker and skip.
       - name: Run the suite against nothing but the repository
-        run: python -m pytest tests/ -q -p no:randomly
+        run: python -m pytest -q -p no:randomly
 
   platform:
     name: Installed on ${{ matrix.label }}
@@ -204,7 +204,7 @@ jobs:
       # free to drift for as long as nobody looked. It is only a gate once a job
       # fails on it.
       - name: Coverage must clear the gate in pyproject.toml
-        run: python -m pytest tests/ -q -p no:randomly --cov --cov-report=term-missing
+        run: python -m pytest -q -p no:randomly --cov --cov-report=term-missing
 
   distribution:
     name: The wheel carries no game data

@@ -16,9 +16,9 @@ Emitting the wrong thing costs the game.
 from __future__ import annotations
 
 import pytest
-from tests.test_merge import rom_with_table, save_patch_for
 
 from z64kit import aps, videopatch
+from z64kit.merge_test import rom_with_table, save_patch_for
 
 VIDEO = {"antialiasing": False, "divot": False, "gamma_dither": False, "dither_filter": False}
 
@@ -49,7 +49,7 @@ class TestAGameWithNoPatchOfItsOwn:
         assert (parsed.crc1, parsed.crc2) == aps.target_checksums(rom)
 
     def test_a_rom_the_video_stage_refuses_emits_nothing(self):
-        from tests.conftest import make_rom
+        from z64kit.conftest import make_rom
 
         outcome = videopatch.build_for(make_rom(), None, **VIDEO)
 

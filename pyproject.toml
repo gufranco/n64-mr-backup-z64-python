@@ -48,13 +48,22 @@ pattern = "VERSION = \"(?P<version>[^\"]+)\""
 # that directory empty, which is why the readme says a recursive clone is the
 # only way to get a working tree.
 packages = ["src/z64kit", "n64-video-interface-python/src/n64_video_interface"]
+# The tests sit beside the code, so they would ship without this.
+exclude = ["*_test.py", "conftest.py"]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/z64kit", "n64-video-interface-python/src/n64_video_interface", "tests", "README.md", "LICENSE.txt", "pyproject.toml"]
 exclude = ["artifacts", "specs", "**/*.z64", "**/*.v64", "**/*.n64", "**/*.aps", "**/*.ips", "**/*.img"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Tests of a module sit beside it, as `<module>_test.py`. Tests of the repository
+# itself, the documents, the workflows and the shell script, stay in tests/,
+# because there is no module for them to sit beside. pytest already collects
+# that name, and it is the one shape that does not collide: a file called
+# `<module>.test.py` is imported as `<package>.<module>.test`, which turns
+# `<package>.<module>` into a namespace package and shadows the module under
+# test with an empty one.
+testpaths = ["src", "tests"]
 addopts = "-q --strict-markers --strict-config"
 # So `pytest` works from a clean checkout with no environment set up. The second
 # entry is the video patcher, which lives in its own repository and arrives as a
@@ -65,6 +74,7 @@ pythonpath = ["src", "n64-video-interface-python/src"]
 [tool.coverage.run]
 branch = true
 source = ["src/z64kit"]
+omit = ["*_test.py", "*/conftest.py"]
 
 [tool.coverage.report]
 fail_under = 95
@@ -108,13 +118,15 @@ enable_error_code = [
   "unused-awaitable",
 ]
 files = ["src/z64kit"]
+exclude = "(_test|conftest)\\.py$"
 
 [[tool.mypy.overrides]]
 # The tests build deliberately malformed inputs to prove the code refuses them,
 # so they hand wrong types in on purpose. Checking them strictly would mean
 # annotating a lie.
-module = "tests.*"
+module = ["z64kit.*_test", "z64kit.conftest"]
 ignore_errors = true
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+"*_test.py" = ["S101"]
+"conftest.py" = ["S101"]

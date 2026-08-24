@@ -1,7 +1,7 @@
 import pytest
-from tests.conftest import make_rom
 
 from z64kit import scan
+from z64kit.conftest import make_rom
 
 
 def write_rom(folder, name, **kw):

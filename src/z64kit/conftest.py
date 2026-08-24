@@ -1,4 +1,5 @@
 import struct
+from pathlib import Path
 
 import pytest
 
@@ -87,3 +88,17 @@ def mode_entry(ctrl=NTSC_LAN1_CTRL, width=320, vsync=525, hsync=3093):
         0x00000200,
         0x00000000,
     )
+
+
+def repo_root() -> Path:
+    """The checkout this file belongs to, found rather than counted to.
+
+    A test that walks up a fixed number of directories moves when the file
+    moves, and the way it fails is silent: a path that no longer resolves makes
+    a skip guard fire, so the suite goes green with the test never having run.
+    That is what happened when these moved out of tests/ and beside the code.
+    """
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+    raise RuntimeError("no pyproject.toml above this file, so the checkout root is unknown")

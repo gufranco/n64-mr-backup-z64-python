@@ -15,11 +15,11 @@ from __future__ import annotations
 
 import io
 import zipfile
-from pathlib import Path
 
 import pytest
 
 from z64kit import patchdb
+from z64kit.conftest import repo_root
 
 
 def make_database(members: list[tuple[str, bytes]]) -> bytes:
@@ -131,7 +131,7 @@ class TestAgainstTheRealDatabase:
     """
 
     def database(self) -> bytes:
-        path = Path(__file__).resolve().parent.parent / "patches" / "z64patch.dat"
+        path = repo_root() / "patches" / "z64patch.dat"
         if not path.is_file():
             pytest.skip("the unit's patch database is not present on this machine")
         return path.read_bytes()

@@ -16,10 +16,10 @@ import zipfile
 
 import pytest
 from n64_video_interface import vi
-from tests.conftest import make_rom, mode_entry
-from tests.test_merge import save_patch_for
 
 from z64kit import aps, artifacts, cli, patchdb
+from z64kit.conftest import make_rom, mode_entry
+from z64kit.merge_test import save_patch_for
 
 
 def rom_variant(marker: int, ctrl: int = 0x0000311E) -> bytes:

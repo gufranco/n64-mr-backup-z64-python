@@ -4,9 +4,9 @@ import struct
 
 import pytest
 from n64_video_interface import checksum, vi
-from tests.conftest import make_rom, mode_entry
 
 from z64kit import aps, merge
+from z64kit.conftest import make_rom, mode_entry
 
 
 def rom_with_table(ctrl=0x0000311E):

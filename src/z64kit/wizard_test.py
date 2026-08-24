@@ -5,9 +5,8 @@ here writes a disk image: the step that would is injected, and the tests assert 
 what it was asked to do rather than on gigabytes of output.
 """
 
-from tests.test_prompts import Scripted
-
 from z64kit import prompts, wizard
+from z64kit.prompts_test import Scripted
 
 
 class Recorder:
@@ -348,7 +347,7 @@ class TestInspectAgainstARealFolder:
 
 class TestDescribePlan:
     def rom(self, folder, name, size=8 * 1024 * 1024):
-        from tests.conftest import make_rom
+        from z64kit.conftest import make_rom
 
         folder.mkdir(parents=True, exist_ok=True)
         (folder / name).write_bytes(make_rom(size=size))

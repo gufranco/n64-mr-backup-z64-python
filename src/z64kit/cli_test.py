@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 
 import pytest
-from tests.conftest import make_rom
 
 from z64kit import cli
+from z64kit.conftest import make_rom
 
 
 def write_rom(folder, name, **kw):
@@ -387,7 +387,7 @@ class TestViCommand:
         assert "no video mode table" in out.lower()
 
     def test_reports_a_planted_mode_table(self, tmp_path, capsys):
-        from tests.conftest import mode_entry
+        from z64kit.conftest import mode_entry
 
         root = tmp_path / "roms"
         root.mkdir()
@@ -425,7 +425,8 @@ class TestViCommand:
 class TestViPatchCommand:
     def sealed_rom(self, path, ctrl=0x0000311E):
         from n64_video_interface import vi
-        from tests.conftest import mode_entry
+
+        from z64kit.conftest import mode_entry
 
         base = bytearray(make_rom(size=vi.CHECKSUM_END + 0x2000, cart="GG"))
         entry = mode_entry(ctrl=ctrl)
@@ -607,7 +608,7 @@ class TestMergeCommand:
 
 class TestMergeCommandSuccess:
     def rom_and_patch(self, tmp_path):
-        from tests.test_merge import rom_with_table, save_patch_for
+        from z64kit.merge_test import rom_with_table, save_patch_for
 
         rom = rom_with_table()
         rom_path = tmp_path / "game.z64"
@@ -684,9 +685,8 @@ class TestMergeCommandSuccess:
         assert rom_path.read_bytes() == before
 
     def test_says_nothing_was_needed_when_the_settings_already_match(self, tmp_path, capsys):
-        from tests.test_merge import rom_with_table, save_patch_for
-
         from z64kit import cli
+        from z64kit.merge_test import rom_with_table, save_patch_for
 
         rom = rom_with_table(ctrl=0x0000320E)
         rom_path = tmp_path / "already.z64"
@@ -1078,9 +1078,8 @@ class TestNoArgumentsStartsTheGuidedFlow:
 
 class TestPlanJson:
     def test_emits_a_disk_list(self, tmp_path, capsys):
-        from tests.conftest import make_rom
-
         from z64kit import cli
+        from z64kit.conftest import make_rom
 
         (tmp_path / "game.z64").write_bytes(make_rom(size=8 * 1024 * 1024))
 
@@ -1089,9 +1088,8 @@ class TestPlanJson:
         assert payload["disks"]
 
     def test_each_disk_lists_its_games_with_the_short_name(self, tmp_path, capsys):
-        from tests.conftest import make_rom
-
         from z64kit import cli
+        from z64kit.conftest import make_rom
 
         (tmp_path / "game.z64").write_bytes(make_rom(size=8 * 1024 * 1024))
 
@@ -1151,7 +1149,7 @@ class TestPatchLibraryIndexesApsWithoutASidecar:
         assert cli._patch_library(str(tmp_path))
 
     def test_the_indexed_patch_reaches_the_matching_rom(self, tmp_path):
-        from tests.conftest import make_rom
+        from z64kit.conftest import make_rom
 
         (tmp_path / "fix.aps").write_bytes(self.aps_for(0x11223344, 0x55667788))
         rom = make_rom(crc1=0x11223344, crc2=0x55667788)
@@ -1162,7 +1160,7 @@ class TestPatchLibraryIndexesApsWithoutASidecar:
         assert [entry[1] for entry in found] == ["APS"]
 
     def test_a_patch_for_another_rom_is_not_applied(self, tmp_path):
-        from tests.conftest import make_rom
+        from z64kit.conftest import make_rom
 
         (tmp_path / "fix.aps").write_bytes(self.aps_for(0xDEADBEEF, 0xCAFEBABE))
         rom = make_rom(crc1=0x11223344, crc2=0x55667788)
@@ -1170,7 +1168,7 @@ class TestPatchLibraryIndexesApsWithoutASidecar:
         assert cli._patches_for(cli._patch_library(str(tmp_path)), _fake_game(rom)) == []
 
     def test_a_header_sidecar_still_takes_precedence(self, tmp_path):
-        from tests.conftest import make_rom
+        from z64kit.conftest import make_rom
 
         rom = make_rom(crc1=0x11223344, crc2=0x55667788)
         (tmp_path / "crack.zps").write_bytes(b"\x00" * 32)
@@ -1181,7 +1179,7 @@ class TestPatchLibraryIndexesApsWithoutASidecar:
         assert [entry[1] for entry in found] == ["ZPS"]
 
     def test_a_byteswapped_header_sidecar_still_matches_a_big_endian_rom(self, tmp_path):
-        from tests.conftest import byteswap, make_rom
+        from z64kit.conftest import byteswap, make_rom
 
         rom = make_rom(crc1=0x11223344, crc2=0x55667788)
         (tmp_path / "crack.zps").write_bytes(b"\x00" * 32)
@@ -1190,7 +1188,7 @@ class TestPatchLibraryIndexesApsWithoutASidecar:
         assert cli._patches_for(cli._patch_library(str(tmp_path)), _fake_game(rom))
 
     def test_a_companion_save_travels_with_its_patch(self, tmp_path):
-        from tests.conftest import make_rom
+        from z64kit.conftest import make_rom
 
         (tmp_path / "fix.aps").write_bytes(self.aps_for(0x11223344, 0x55667788))
         (tmp_path / "fix.ram").write_bytes(b"\x01" * 64)
@@ -1237,9 +1235,8 @@ def _fake_game(rom: bytes):
 
 class TestReportUsesRealSaveTypes:
     def test_the_save_column_is_not_all_none(self, tmp_path, monkeypatch, capsys):
-        from tests.conftest import make_rom
-
         from z64kit import cli, db
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -1262,9 +1259,8 @@ class TestReportUsesRealSaveTypes:
         assert "EEPROM 4Kb" in doc
 
     def test_a_missing_catalogue_is_reported_and_not_fatal(self, tmp_path, monkeypatch, capsys):
-        from tests.conftest import make_rom
-
         from z64kit import cli, db
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -1288,9 +1284,8 @@ class TestReportUsesRealSaveTypes:
         assert "save type" in capsys.readouterr().out.lower()
 
     def test_a_game_with_a_matching_patch_is_marked_as_patched(self, tmp_path, monkeypatch):
-        from tests.conftest import make_rom
-
         from z64kit import cli, db
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -1335,9 +1330,8 @@ class TestReportWritesTheHardwareDocument:
         )
 
     def test_it_writes_both_documents(self, tmp_path, monkeypatch):
-        from tests.conftest import make_rom
-
         from z64kit import cli, db
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -1350,9 +1344,8 @@ class TestReportWritesTheHardwareDocument:
         assert (tmp_path / "out" / "hardware.tex").exists()
 
     def test_the_hardware_document_names_what_to_buy(self, tmp_path, monkeypatch):
-        from tests.conftest import make_rom
-
         from z64kit import cli, db
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -1367,9 +1360,8 @@ class TestReportWritesTheHardwareDocument:
         assert "16 Kbit EEPROM" in doc
 
     def test_both_documents_are_reported_to_the_user(self, tmp_path, monkeypatch, capsys):
-        from tests.conftest import make_rom
-
         from z64kit import cli, db
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -1385,9 +1377,8 @@ class TestReportWritesTheHardwareDocument:
 
 class TestCandidatesCarryTheirSaveType:
     def test_a_game_gets_the_save_type_it_was_given(self, tmp_path):
-        from tests.conftest import make_rom
-
         from z64kit import cli, scan
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -1399,9 +1390,8 @@ class TestCandidatesCarryTheirSaveType:
         assert made[0].save == "eeprom2k"
 
     def test_a_game_with_no_entry_falls_back_to_none(self, tmp_path):
-        from tests.conftest import make_rom
-
         from z64kit import cli, scan
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -1413,9 +1403,8 @@ class TestCandidatesCarryTheirSaveType:
     def test_the_inventory_command_asks_about_a_real_donor(self, tmp_path, monkeypatch, capsys):
         import argparse
 
-        from tests.conftest import make_rom
-
         from z64kit import cli, db
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()

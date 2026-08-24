@@ -122,9 +122,8 @@ class TestCapacity:
 
 class TestBuildPlacesTheDatabase:
     def test_the_database_is_written_to_the_disk(self, tmp_path):
-        from tests.conftest import make_rom
-
         from z64kit import cli
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -148,9 +147,8 @@ class TestBuildPlacesTheDatabase:
         assert b"Z64PATCHDAT" in raw
 
     def test_a_missing_database_is_reported_and_not_fatal(self, tmp_path, capsys):
-        from tests.conftest import make_rom
-
         from z64kit import cli
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
@@ -171,9 +169,8 @@ class TestBuildPlacesTheDatabase:
         assert "z64patch.dat" in capsys.readouterr().out
 
     def test_the_folder_route_places_it_too(self, tmp_path):
-        from tests.conftest import make_rom
-
         from z64kit import cli
+        from z64kit.conftest import make_rom
 
         source = tmp_path / "roms"
         source.mkdir()
