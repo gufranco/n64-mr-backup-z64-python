@@ -1625,3 +1625,94 @@ class TestPayloadCommand:
 
         assert code == 1
         assert "could not write" in capsys.readouterr().out
+
+
+class TestLeavingAPromptIsNotACrash:
+    """Ctrl-D and Ctrl-C are how a person leaves a prompt.
+
+    The guided flow tells the reader to type `q` to leave, and handles that
+    cleanly. Nothing told the two habits every terminal user already has, so both
+    escaped as a traceback out of `input`, printed over the top of a flow whose
+    whole point is that it is for someone who did not ask for a command line.
+    Piped or closed stdin arrives here as the same EOF, which is what a reader
+    running the documented no-argument command in a script hits.
+    """
+
+    def test_end_of_input_asks_to_leave(self, monkeypatch):
+        from z64kit import cli, prompts
+
+        monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(EOFError))
+
+        with pytest.raises(prompts.Cancelled):
+            cli.ConsoleIO().ask("Choose 1-3: ")
+
+    def test_an_interrupt_asks_to_leave(self, monkeypatch):
+        from z64kit import cli, prompts
+
+        monkeypatch.setattr(
+            "builtins.input", lambda prompt="": (_ for _ in ()).throw(KeyboardInterrupt)
+        )
+
+        with pytest.raises(prompts.Cancelled):
+            cli.ConsoleIO().ask("Choose 1-3: ")
+
+    def test_a_typed_answer_still_comes_back(self, monkeypatch):
+        from z64kit import cli
+
+        monkeypatch.setattr("builtins.input", lambda prompt="": "2")
+
+        assert cli.ConsoleIO().ask("Choose 1-3: ") == "2"
+
+    def test_the_guided_flow_ends_with_the_same_words_q_gives(self, monkeypatch, capsys):
+        from z64kit import cli
+
+        monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(EOFError))
+
+        code = cli.main([])
+
+        assert code == 1
+        assert "Cancelled. Nothing was written." in capsys.readouterr().out
+
+    def test_the_guided_flow_prints_no_traceback(self, monkeypatch, capsys):
+        from z64kit import cli
+
+        monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(EOFError))
+
+        cli.main([])
+        printed = capsys.readouterr()
+
+        assert "Traceback" not in printed.out + printed.err
+        assert "EOFError" not in printed.out + printed.err
+
+    def test_a_command_that_prompts_ends_with_the_same_words(
+        self, tmp_path, collection, monkeypatch, capsys
+    ):
+        """`inventory --ask` prompts too, and `q` there escaped main uncaught.
+
+        The guided flow catches its own cancellation, so nothing outside it ever
+        did. Typing the documented `q` at the cartridge list has always ended in a
+        traceback; routing Ctrl-D and Ctrl-C to that same request is what made the
+        gap reachable without typing anything at all.
+        """
+        from z64kit import cli
+
+        monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(EOFError))
+
+        code = cli.main(
+            ["inventory", str(collection), "--ask", "--file", str(tmp_path / "inv.json")]
+        )
+        printed = capsys.readouterr()
+
+        assert code == 1
+        assert "Cancelled. Nothing was written." in printed.out
+        assert "Traceback" not in printed.out + printed.err
+
+    def test_leaving_writes_no_inventory_file(self, tmp_path, collection, monkeypatch):
+        from z64kit import cli
+
+        monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(EOFError))
+        target = tmp_path / "inv.json"
+
+        cli.main(["inventory", str(collection), "--ask", "--file", str(target)])
+
+        assert not target.exists()

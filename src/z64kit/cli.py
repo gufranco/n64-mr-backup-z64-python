@@ -409,6 +409,26 @@ def cmd_organise(args: argparse.Namespace) -> int:
     return 0
 
 
+def _read_line(prompt: str) -> str:
+    """Read one answer from the real terminal.
+
+    Ctrl-D and Ctrl-C are how people leave a prompt, and neither is a fault. Both
+    arrive here as the request `q` already makes, so the guided flow ends with the
+    line it prints for `q` rather than with a traceback printed over a flow whose
+    whole point is that the reader did not ask for a command line. Closed or piped
+    stdin raises the same EOF, which is what the documented no-argument command
+    hits when it runs anywhere other than a terminal.
+
+    The newline matches what the terminal echoes when the answer was typed, so the
+    two ways out leave the cursor in the same place.
+    """
+    try:
+        return input(prompt)
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raise prompts.Cancelled("cancelled") from None
+
+
 class ConsoleIO:
     """The real terminal. Every prompt goes through this so the flow stays testable."""
 
@@ -416,7 +436,7 @@ class ConsoleIO:
         print(text)
 
     def ask(self, prompt: str) -> str:
-        return input(prompt)
+        return _read_line(prompt)
 
 
 def _ask_inventory(
@@ -909,7 +929,10 @@ def cmd_write(args: argparse.Namespace) -> int:
     print(f"serial      {made.serial:08X} (fresh for this disk)")
 
     if not args.yes:
-        answer = input(f"Write to {device.block} and destroy its contents? type YES: ")
+        try:
+            answer = _read_line(f"Write to {device.block} and destroy its contents? type YES: ")
+        except prompts.Cancelled:
+            answer = ""
         if answer.strip() != "YES":
             print("aborted")
             return 1
@@ -1205,6 +1228,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         return int(args.func(args))
+    except prompts.Cancelled:
+        print()
+        print("Cancelled. Nothing was written.")
+        return 1
     except PatchFolderMissingError as error:
         print(error)
         return 2
