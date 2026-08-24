@@ -2073,7 +2073,7 @@ class TestInventoryReporting:
 
 class TestTheDonorCatalogueWithADonorItCannotName:
     def test_a_donor_with_no_save_tag_is_passed_over(self, monkeypatch):
-        from z64kit import compat, inventory, scan
+        from z64kit import compat, db, inventory, scan
 
         rules = compat.load_rules()
         games = [compat.Candidate(key="dk64.z64", title="Donkey Kong 64 (USA)", save="eeprom2k")]
@@ -2081,6 +2081,8 @@ class TestTheDonorCatalogueWithADonorItCannotName:
         monkeypatch.setattr(
             compat, "donor_save_tag", lambda r, key: "" if key == "eeprom16k" else "flash128k"
         )
+        monkeypatch.setattr(db, "available", lambda: True)
+        monkeypatch.setattr(db, "load_default", lambda: db.parse("ID:NB7___ eeprom2k # Banjo"))
 
         purchasable, note = cli._purchasable_donors(
             rules, shopping, scan.Collection(root="nowhere")
@@ -2281,16 +2283,26 @@ class TestTheArtifactsReport:
     complete: the extra files are verified too, they are just for other games.
     """
 
+    def patches(self):
+        """The real folder, which is user-supplied and absent from the repository."""
+        from z64kit.conftest import repo_root
+
+        folder = repo_root() / "patches"
+        if not any(folder.glob("*.aps")):
+            pytest.skip("the supplied patch files are not present on this machine")
+        return folder
+
     def test_extra_verified_files_are_counted_separately(self, capsys):
-        cli.main(["artifacts", "--folder", "patches"])
+        cli.main(["artifacts", "--folder", str(self.patches())])
 
         assert "more verified, for games not in this collection" in capsys.readouterr().out
 
     def test_narrowing_to_a_collection_changes_what_is_expected(self, collection, capsys):
-        cli.main(["artifacts", "--folder", "patches", "--source", str(collection)])
+        folder = str(self.patches())
+        cli.main(["artifacts", "--folder", folder, "--source", str(collection)])
         narrowed = capsys.readouterr().out
 
-        cli.main(["artifacts", "--folder", "patches"])
+        cli.main(["artifacts", "--folder", folder])
         whole = capsys.readouterr().out
 
         assert narrowed != whole
@@ -2424,9 +2436,11 @@ class TestReportingWhenTheShapeIsUnusual:
         assert "One cartridge holds one game save" not in capsys.readouterr().out
 
     def test_a_donor_the_catalogue_has_no_cartridge_for_is_omitted(self, monkeypatch):
-        from z64kit import compat, donors, inventory, scan
+        from z64kit import compat, db, donors, inventory, scan
 
         monkeypatch.setattr(donors, "catalogued", lambda catalogue, tag, owned=None: ())
+        monkeypatch.setattr(db, "available", lambda: True)
+        monkeypatch.setattr(db, "load_default", lambda: db.parse("ID:NB7___ eeprom2k # Banjo"))
         rules = compat.load_rules()
         games = [compat.Candidate(key="dk64.z64", title="Donkey Kong 64 (USA)", save="eeprom2k")]
         shopping = inventory.shopping_list(games, inventory.Inventory(), rules)
