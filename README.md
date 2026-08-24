@@ -408,16 +408,24 @@ checker changing its mind about code nobody touched.
 - **SHA-256 alone decides acceptance.** Size and CRC32 are cross-reference aids for looking a file
   up in a public database, never the check itself.
 
-## What has not been verified
+## What has been verified, and what has not
 
 The APS format, the patch lookup key, and the merge arithmetic were established by parsing every
 patch in a real unit database and requiring each to consume its bytes to exact EOF, then
 cross-checking the stored checksums against the paired header. All agreed.
 
-None of it has been run on the hardware. One question in particular is open: when both a patch
-beside the ROM and a patch inside the unit's database match the same game, which one wins. Until
-that is settled on a real unit, rebuilding the database with the merged patch is the safer delivery
-route than dropping a file beside the ROM, and it is the route `--as-patches` takes.
+Disks built by this have been written and run on a real Mr. Backup Z64.
+
+The video patches are the part that has not been exercised broadly. They have been run on hardware,
+but not against every ROM of every region, and the mode table is found by scanning rather than by
+reading a fixed offset. A dump whose table this cannot prove is a table is refused rather than
+edited, so the failure mode is a game that goes unpatched rather than one that breaks. Even so,
+test a disk before committing to a batch, and please open an issue with the title and region if a
+game is refused or comes out wrong.
+
+One question stays open: when both a patch beside the ROM and a patch inside the unit's database
+match the same game, which one wins. Rebuilding the database with the merged patch sidesteps it by
+leaving exactly one candidate, and that is the route `--as-patches` takes.
 
 ## License
 
