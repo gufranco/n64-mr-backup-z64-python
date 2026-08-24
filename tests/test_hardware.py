@@ -205,3 +205,84 @@ class TestEveryBranchOfTheDocument:
 
         assert "One cartridge holds one game save" in with_note
         assert "One cartridge holds one game save" not in without
+
+
+class TestWhatToBuyToSatisfyADonor:
+    """The list a reader needs once they know which chip is missing.
+
+    Naming one example cartridge answers what a donor is. It does not answer what
+    to do when that one is expensive, region locked, or simply gone, which is the
+    state a reader is usually in by the time they open this document.
+
+    The catalogue behind the list mixes prototypes and romhacks in with retail
+    releases and flags neither, so the section says what it is showing rather
+    than presenting every row as something purchasable.
+    """
+
+    def rows(self):
+        from z64kit.donors import Donor
+
+        return {
+            "eeprom16k": (
+                Donor(title="Banjo-Tooie", code="NB7"),
+                Donor(title="Donkey Kong 64", code="NDK"),
+            ),
+            "flashram": (Donor(title="Command & Conquer", code="NCC"),),
+        }
+
+    def build_with(self, **kw):
+        rules = compat.load_rules()
+        held = inventory.Inventory()
+        return hardware.build(
+            inventory.shopping_list(candidates(), held, rules),
+            rules=rules,
+            held=held,
+            generated="2026-08-20",
+            **kw,
+        )
+
+    def test_it_lists_every_cartridge_carrying_the_chip(self):
+        out = self.build_with(purchasable=self.rows())
+
+        assert "Banjo-Tooie" in out
+        assert "Donkey Kong 64" in out
+        assert r"Command \& Conquer" in out
+
+    def test_it_prints_the_code_from_the_label(self):
+        out = self.build_with(purchasable=self.rows())
+
+        assert "NB7" in out
+        assert "NCC" in out
+
+    def test_it_says_what_the_list_is(self):
+        out = self.build_with(purchasable=self.rows())
+
+        assert "prototypes" in out or "romhacks" in out
+
+    def test_without_the_catalogue_no_section_appears(self):
+        out = self.build_with()
+
+        assert "NB7" not in out
+
+    def test_without_the_catalogue_the_reader_is_told_how_to_get_it(self):
+        out = self.build_with(catalogue_note="Run `z64kit db-update` to list them.")
+
+        assert "db-update" in out
+
+    def test_a_donor_the_reader_already_owns_gets_no_shopping_list(self):
+        rules = compat.load_rules()
+        questions = inventory.questions(candidates(), rules)
+        owned = inventory.Inventory(owned=frozenset(q.key for q in questions), recorded=True)
+
+        out = hardware.build(
+            inventory.shopping_list(candidates(), owned, rules),
+            rules=rules,
+            held=owned,
+            generated="2026-08-20",
+            purchasable=self.rows(),
+        )
+
+        assert "NB7" not in out
+
+    def test_it_stays_deterministic(self):
+        assert self.build_with(purchasable=self.rows()) == self.build_with(purchasable=self.rows())

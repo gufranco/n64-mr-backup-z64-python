@@ -12,7 +12,10 @@ this project cannot see.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from ..compat import Rules
+from ..donors import Donor
 from ..inventory import Inventory, ShoppingList
 from . import latex
 
@@ -31,14 +34,32 @@ def _summary(result: ShoppingList, generated: str) -> str:
     )
 
 
+CATALOGUE_CAVEAT = (
+    "The catalogue behind this list holds prototypes, kiosk units and romhacks "
+    "beside retail releases and marks none of them as such, so a row here means a "
+    "cartridge known to carry the chip rather than one known to be on sale. The "
+    "code is the game identifier from the label, with a question mark where the "
+    "catalogue records that a position varies, such as region or revision."
+)
+
+
 def build(
     result: ShoppingList,
     *,
     rules: Rules,
     held: Inventory,
     generated: str,
+    purchasable: Mapping[str, tuple[Donor, ...]] | None = None,
+    catalogue_note: str = "",
 ) -> str:
-    """Render the shopping list as a LaTeX document."""
+    """Render the shopping list as a LaTeX document.
+
+    `purchasable` maps a donor key to every catalogued cartridge carrying its
+    chip. It is optional because the save-type catalogue is fetched rather than
+    bundled, and a document that omits the list is more useful than one that
+    refuses to render without it. `catalogue_note` is how the reader is told the
+    list is absent and what to run to get it.
+    """
     body: list[str] = [latex.section("Summary"), _summary(result, generated)]
 
     if not held.is_recorded:
@@ -75,6 +96,23 @@ def build(
                     widths=["150mm"],
                 )
             )
+
+        offered = purchasable or {}
+        for item in outstanding:
+            rows = offered.get(item.key, ())
+            if not rows:
+                continue
+            body.append(latex.section(f"Cartridges that serve as a {item.label}"))
+            body.append(latex.note(CATALOGUE_CAVEAT))
+            body.append(
+                latex.longtable(
+                    ["Cartridge", "Code"],
+                    [[row.title, row.code] for row in rows],
+                    widths=["120mm", "30mm"],
+                )
+            )
+        if catalogue_note and not offered:
+            body.append(latex.note(catalogue_note))
 
     owned = [item for item in result.items if not item.outstanding]
     if owned:

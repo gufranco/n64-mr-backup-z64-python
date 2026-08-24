@@ -34,6 +34,7 @@ from . import (
     burn,
     compat,
     db,
+    donors,
     inventory,
     merge,
     naming,
@@ -545,6 +546,38 @@ def _save_types(found: scan.Collection) -> dict[str, str]:
     return out
 
 
+def _purchasable_donors(
+    rules: compat.Rules, shopping: inventory.ShoppingList
+) -> tuple[dict[str, tuple[donors.Donor, ...]], str]:
+    """Every catalogued cartridge that would satisfy each donor still outstanding.
+
+    The save-type catalogue is fetched rather than bundled, so its absence is a
+    normal state rather than a fault. When it is missing the document says which
+    command fetches it, which is more use to the reader than a shorter document
+    that does not mention the list exists.
+    """
+    outstanding = [item for item in shopping.items if item.outstanding]
+    if not any(compat.donor_save_tag(rules, item.key) for item in outstanding):
+        return {}, ""
+    if not db.available():
+        return {}, (
+            "The list of cartridges that would satisfy each donor is not in this "
+            "document because the save-type catalogue has not been downloaded. Run "
+            "`z64kit db-update` and generate this report again."
+        )
+
+    catalogue = db.load_default()
+    out: dict[str, tuple[donors.Donor, ...]] = {}
+    for item in outstanding:
+        tag = compat.donor_save_tag(rules, item.key)
+        if not tag:
+            continue
+        rows = donors.catalogued(catalogue, tag)
+        if rows:
+            out[item.key] = rows
+    return out, ""
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     found = _scan_or_exit(args.source)
     rules = compat.load_rules()
@@ -569,7 +602,15 @@ def cmd_report(args: argparse.Namespace) -> int:
     # moment. The catalogue is read with the disks in hand; this one is read
     # before spending money on cartridges.
     shopping = inventory.shopping_list(_candidates(found, saves), held, rules)
-    gear = hardware.build(shopping, rules=rules, held=held, generated=generated)
+    purchasable, catalogue_note = _purchasable_donors(rules, shopping)
+    gear = hardware.build(
+        shopping,
+        rules=rules,
+        held=held,
+        generated=generated,
+        purchasable=purchasable,
+        catalogue_note=catalogue_note,
+    )
     written = render.write(gear, out_dir / "hardware", compile_pdf=not args.no_pdf)
     print(written.message)
     return 0

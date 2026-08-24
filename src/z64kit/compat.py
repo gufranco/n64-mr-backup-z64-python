@@ -192,6 +192,18 @@ def summarise(candidates: list[Candidate], rules: Rules) -> Summary:
     )
 
 
+def donor_save_tag(rules: Rules, donor: str) -> str:
+    """The save-chip tag this donor carries, in the catalogue's vocabulary.
+
+    The label a reader sees and the tag a catalogue keys on are different words
+    for one chip, so the mapping is data beside the donor rather than a lookup
+    table in code that would drift from it.
+    """
+    entry = rules.donors.get(donor, {})
+    tag = entry.get("save_tag", "")
+    return str(tag) if isinstance(tag, str) else ""
+
+
 def donor_also_carrying(rules: Rules, donor: str, chip: str) -> tuple[str, ...]:
     """Cartridges that carry this save chip and the wanted boot chip at once."""
     entry = rules.donors.get(donor, {})

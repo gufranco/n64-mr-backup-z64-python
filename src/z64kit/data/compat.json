@@ -44,6 +44,7 @@
   "donor_cartridges": {
     "eeprom16k": {
       "label": "16 Kbit EEPROM donor",
+      "save_tag": "eeprom2k",
       "reference": "Star Wars Episode I Racer",
       "also_carrying_6102": ["Mario Tennis", "Ridge Racer 64"],
       "unlocks": [
@@ -61,6 +62,7 @@
     },
     "flashram": {
       "label": "FlashRAM donor",
+      "save_tag": "flash128k",
       "reference": "Command & Conquer",
       "also_carrying_6102": [
         "Command & Conquer",
