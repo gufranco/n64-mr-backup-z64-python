@@ -96,3 +96,6 @@ coverage.xml
 
 # Type checker cache
 .mypy_cache/
+
+# uv writes this when a contributor runs `uv run`; the project builds with pip
+uv.lock
