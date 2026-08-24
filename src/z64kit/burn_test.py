@@ -682,3 +682,52 @@ class TestReadingADevice:
 
         assert found.media == "ZIP 100"
         assert found.removable is True
+
+
+class TestAStallDuringTheReadBack:
+    """The verify pass slows to a crawl, which is the click starting.
+
+    The write already stops on a stall. The read back has the same guard and
+    nothing exercised it, so the half of the transfer that decides whether the
+    disk can be trusted was the half with no test.
+    """
+
+    def device(self):
+        return burn.Device(
+            node="disk9",
+            size=100 * 1024 * 1024,
+            media="ZIP 100",
+            removable=True,
+            external=True,
+            virtual=False,
+            block="/dev/disk9",
+            raw="/dev/rdisk9",
+        )
+
+    def test_it_stops_and_ejects_rather_than_finishing(self, tmp_path, monkeypatch):
+        payload = tmp_path / "payload.bin"
+        payload.write_bytes(b"\x5a" * 64)
+
+        class AlwaysStalls(burn.StallWatch):
+            def observe(self, direction, index, total, seconds):
+                return "the read stalled" if direction == "read" else None
+
+        ejected = []
+
+        def execute(command, **kwargs):
+            if any("eject" in part or "umount" in part or "diskutil" in part for part in command):
+                ejected.append(command)
+            return subprocess.CompletedProcess(command, 0, b"\x5a" * 64, b"")
+
+        with pytest.raises(burn.WriteFailedError, match="the read stalled"):
+            burn.write_image(
+                payload,
+                self.device(),
+                total_bytes=64,
+                watch=AlwaysStalls(),
+                chunk_bytes=64,
+                run=execute,
+                say=lambda _message: None,
+            )
+
+        assert ejected

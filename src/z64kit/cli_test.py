@@ -2033,3 +2033,241 @@ class TestTheDonorListWithoutTheCatalogue:
 
         assert purchasable == {}
         assert "db-update" in note
+
+
+class TestInventoryReporting:
+    """What `inventory` prints when the collection needs nothing, and when it does.
+
+    The command answers a question before the reader spends money, so the two
+    endings matter equally: a list of what to buy, or a sentence saying there is
+    nothing to buy. Only the first had a test.
+    """
+
+    def test_a_collection_whose_gaps_are_all_owned_says_so(self, collection, tmp_path, capsys):
+        """Every requirement recorded as owned, which is the ending nobody tested.
+
+        The boot cartridge is outstanding for any collection until the reader
+        says they have one, so reaching this sentence needs a recorded
+        inventory rather than an empty one.
+        """
+        code = cli.main(
+            ["inventory", str(collection), "--file", str(tmp_path / "inv.json"), "--own", "boot"]
+        )
+
+        assert code == 0
+        assert "Nothing outstanding" in capsys.readouterr().out
+
+    def test_a_title_too_large_to_load_is_counted(self, tmp_path, capsys):
+        from z64kit.conftest import make_rom
+
+        root = tmp_path / "roms"
+        root.mkdir()
+        (root / "Resident Evil 2 (USA).z64").write_bytes(
+            make_rom(title="RESIDENT EVIL II", cart="RE", size=64 * 1024 * 1024)
+        )
+
+        cli.main(["inventory", str(root), "--file", str(tmp_path / "inv.json")])
+
+        assert "Too large to load at all" in capsys.readouterr().out
+
+
+class TestTheDonorCatalogueWithADonorItCannotName:
+    def test_a_donor_with_no_save_tag_is_passed_over(self, monkeypatch):
+        from z64kit import compat, inventory, scan
+
+        rules = compat.load_rules()
+        games = [compat.Candidate(key="dk64.z64", title="Donkey Kong 64 (USA)", save="eeprom2k")]
+        shopping = inventory.shopping_list(games, inventory.Inventory(), rules)
+        monkeypatch.setattr(
+            compat, "donor_save_tag", lambda r, key: "" if key == "eeprom16k" else "flash128k"
+        )
+
+        purchasable, note = cli._purchasable_donors(
+            rules, shopping, scan.Collection(root="nowhere")
+        )
+
+        assert note == ""
+        assert "eeprom16k" not in purchasable
+
+
+class TestTheViApplyFooter:
+    """The reminder that the blurriest setting is not one of the switches above.
+
+    It prints unless `--no-dither` was named, which is exactly when the reader
+    still needs telling. Printing it after they already asked for it would read
+    as the tool not having noticed.
+    """
+
+    def test_it_is_printed_when_dither_was_not_asked_for(self, tmp_path, capsys):
+        from z64kit.conftest import make_rom
+
+        root = tmp_path / "roms"
+        root.mkdir()
+        (root / "Game (USA).z64").write_bytes(make_rom())
+
+        cli.main(["vi", str(root), "--no-aa"])
+
+        assert "Add --no-dither" in capsys.readouterr().out
+
+    def test_it_is_not_printed_when_it_was(self, tmp_path, capsys):
+        from z64kit.conftest import make_rom
+
+        root = tmp_path / "roms"
+        root.mkdir()
+        (root / "Game (USA).z64").write_bytes(make_rom())
+
+        cli.main(["vi", str(root), "--no-dither"])
+
+        assert "Add --no-dither" not in capsys.readouterr().out
+
+
+class TestWritingWithTheRemainingFlags:
+    """The three paths through `write` that the earlier cases stepped over.
+
+    `--full` writes the whole image rather than the used prefix, a payload the
+    FAT layer rejects has to be named rather than raised, and a drive that does
+    not eject leaves the reader to pull the disk themselves.
+    """
+
+    def device(self):
+        from z64kit import burn
+
+        return burn.Device(
+            node="disk9",
+            size=100 * 1024 * 1024,
+            media="ZIP 100",
+            removable=True,
+            external=True,
+            virtual=False,
+            block="/dev/disk9",
+            raw="/dev/rdisk9",
+        )
+
+    def image(self, tmp_path):
+        from z64kit.fat import image as fat
+
+        made = tmp_path / "master.img"
+        made.write_bytes(fat.blank_image())
+        return made
+
+    def arrange(self, monkeypatch, *, ejected=True):
+        from z64kit import burn
+
+        monkeypatch.setattr(burn, "read_device", lambda node: self.device())
+        monkeypatch.setattr(burn, "refusals", lambda device, expected: ())
+        seen = {}
+
+        def write_image(payload, device, **kwargs):
+            seen["bytes"] = payload.read_bytes()
+            return burn.Written(chunks=7, seconds=3, ejected=ejected)
+
+        monkeypatch.setattr(burn, "write_image", write_image)
+        return seen
+
+    def test_full_writes_the_whole_image(self, tmp_path, monkeypatch):
+        from z64kit.fat import image as fat
+
+        seen = self.arrange(monkeypatch)
+
+        cli.main(["write", str(self.image(tmp_path)), "disk9", "--yes", "--empty", "--full"])
+
+        assert len(seen["bytes"]) == len(fat.blank_image())
+
+    def test_a_payload_the_fat_layer_rejects_is_named(self, tmp_path, monkeypatch, capsys):
+        self.arrange(monkeypatch)
+        broken = tmp_path / "broken.img"
+        broken.write_bytes(b"not an image")
+
+        code = cli.main(["write", str(broken), "disk9", "--yes", "--empty"])
+
+        assert code == 1
+        assert "cannot be written" in capsys.readouterr().out
+
+    def test_a_drive_that_does_not_eject_says_nothing_about_it(self, tmp_path, monkeypatch, capsys):
+        self.arrange(monkeypatch, ejected=False)
+
+        cli.main(["write", str(self.image(tmp_path)), "disk9", "--yes", "--empty"])
+
+        assert "safe to remove" not in capsys.readouterr().out
+
+
+class TestAnArgumentListThatNamesNoCommand:
+    def test_a_command_it_does_not_know_is_refused_by_the_parser(self):
+        with pytest.raises(SystemExit):
+            cli.main(["no-such-command"])
+
+    def test_an_empty_list_is_the_guided_flow(self, monkeypatch):
+        from z64kit import wizard
+
+        seen = []
+        monkeypatch.setattr(wizard, "run", lambda console, **kw: seen.append(1) or 0)
+
+        assert cli.main([]) == 0
+        assert seen
+
+
+class TestBuildingWithCompanionsAndFailures:
+    """A save file riding along with its game, and a volume that will not verify.
+
+    `build` writes every file a game needs, not just the ROM. The companion path
+    and the refusal to ship a volume whose own verification fails are the two
+    branches that decide whether a disk is trustworthy, and neither had a test.
+    """
+
+    def collection_with_companion(self, tmp_path):
+        from z64kit.conftest import make_rom
+
+        root = tmp_path / "roms"
+        root.mkdir()
+        (root / "Game (USA).z64").write_bytes(make_rom(cart="GG", size=8 * 1024 * 1024))
+        (root / "Game (USA).eep").write_bytes(b"\x01" * 512)
+        return root
+
+    def test_a_companion_is_written_beside_its_game(self, tmp_path):
+        """Asserted against the image rather than the manifest.
+
+        `build` records the ROM and its patches in manifest.json and writes the
+        companion without listing it, so the manifest is the one place that
+        cannot answer whether the save file reached the disk.
+        """
+        out = tmp_path / "images"
+        cli.main(["build", str(self.collection_with_companion(tmp_path)), str(out)])
+
+        image = next(out.glob("*.img")).read_bytes()
+
+        assert b"EEP" in image
+        assert image.count(b"GAME") >= 2
+
+    def test_a_volume_that_fails_its_own_check_is_not_shipped(self, tmp_path, monkeypatch, capsys):
+        from z64kit.fat import writer
+
+        monkeypatch.setattr(writer.Volume, "verify", lambda self: ["a cluster is wrong"])
+        out = tmp_path / "images"
+
+        code = cli.main(["build", str(self.collection_with_companion(tmp_path)), str(out)])
+
+        assert code == 1
+        assert "verification failed" in capsys.readouterr().err
+
+
+class TestTheMergeReport:
+    def test_more_than_eight_changed_words_are_summarised(self, tmp_path, capsys):
+        from n64_video_interface import vi
+
+        from z64kit import aps
+        from z64kit.conftest import make_rom, mode_entry
+
+        data = bytearray(make_rom(size=vi.CHECKSUM_END + 0x4000))
+        for index in range(10):
+            entry = mode_entry(ctrl=0x0000311E)
+            at = 0x2000 + index * 0x40
+            data[at : at + len(entry)] = entry
+        rom = vi.reseal(bytes(data))
+        rom_path = tmp_path / "game.z64"
+        rom_path.write_bytes(rom)
+        patch_path = tmp_path / "game.aps"
+        patch_path.write_bytes(aps.build(rom, rom, description="stand in"))
+
+        cli.main(["merge", str(rom_path), str(patch_path), "--no-aa"])
+
+        assert "more" in capsys.readouterr().out

@@ -200,3 +200,26 @@ class TestAHiddenFile:
         found = scan.scan(str(root))
 
         assert any(one.reason == "hidden file" for one in found.skipped)
+
+
+class TestADirectoryInsideADiskFolder:
+    """A folder nested inside a disk folder, which a reader can easily make.
+
+    It is not a file, so it is passed over without being recorded as skipped.
+    Recording it would put a directory in a list the reader reads as files that
+    could not be used.
+    """
+
+    def test_it_is_neither_scanned_nor_recorded_as_skipped(self, tmp_path):
+        from z64kit.conftest import make_rom
+
+        root = tmp_path / "roms"
+        disk = root / "Zip Disk 01"
+        disk.mkdir(parents=True)
+        (disk / "Game (USA).z64").write_bytes(make_rom())
+        (disk / "extras").mkdir()
+
+        found = scan.scan(str(root))
+
+        assert len(found.games) == 1
+        assert not any("extras" in one.path for one in found.skipped)

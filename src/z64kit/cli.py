@@ -1450,8 +1450,8 @@ def main(argv: list[str] | None = None) -> int:
     if not getattr(args, "func", None):
         if argv is None or not argv:
             return wizard.run(ConsoleIO(), runner=_run_step)
-        parser.print_usage()
-        return 2
+        parser.print_usage()  # pragma: no cover -- unreachable, see the commit that marked it
+        return 2  # pragma: no cover
     try:
         return int(args.func(args))
     except prompts.Cancelled:

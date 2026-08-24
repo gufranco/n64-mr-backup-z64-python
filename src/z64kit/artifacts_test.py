@@ -440,3 +440,19 @@ class TestTheGeneratedFolderReadme:
 
         assert "`11111111`" in row
         assert "`22222222`" in row
+
+
+class TestTheFolderReadmeShape:
+    def test_a_row_for_an_entry_that_names_its_own_game(self):
+        row = artifacts._folder_row(_entry(game="A Game"), artifacts.Manifest())
+
+        assert "A Game" in row
+        assert "Save data used by" not in row
+
+    def test_a_manifest_with_nothing_out_of_scope_omits_that_table(self):
+        manifest = artifacts.Manifest(by_sha256={"a": _entry()})
+
+        text = artifacts.render_folder_readme(manifest)
+
+        assert "What does not belong here" in text
+        assert "Keep them wherever you keep unit firmware" not in text
