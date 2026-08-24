@@ -5,6 +5,8 @@ here writes a disk image: the step that would is injected, and the tests assert 
 what it was asked to do rather than on gigabytes of output.
 """
 
+from pathlib import Path
+
 from z64kit import prompts, wizard
 from z64kit.prompts_test import Scripted
 
@@ -653,3 +655,148 @@ class TestOfferingToWriteTheDisks:
         wizard.step_offer_to_write(console, images_in(tmp_path, 1), Recorder())
 
         assert "ejects" in "\n".join(console.written)
+
+
+class TestAFolderThatCannotBeRead:
+    """A directory the process cannot list, which is normal on a shared machine.
+
+    The guided flow scans for folders worth offering. One it cannot open is not
+    an error to report, it is a folder that does not qualify, and the difference
+    is whether the reader gets a first question or a traceback.
+    """
+
+    def test_it_does_not_count_as_holding_games(self, tmp_path, monkeypatch):
+        def refuse(self):
+            raise PermissionError("not yours")
+
+        monkeypatch.setattr(Path, "iterdir", refuse)
+
+        assert wizard._holds_games(tmp_path) is False
+
+    def test_a_working_directory_that_cannot_be_listed_offers_nothing_from_it(
+        self, tmp_path, monkeypatch
+    ):
+        home = tmp_path / "home"
+        home.mkdir()
+        blocked = tmp_path / "cwd"
+        blocked.mkdir()
+        real = Path.iterdir
+
+        def sometimes(self):
+            if self == blocked:
+                raise PermissionError("not yours")
+            return real(self)
+
+        monkeypatch.setattr(Path, "iterdir", sometimes)
+
+        assert wizard.candidate_folders(home, blocked) == []
+
+
+class TestRecordingTheInventoryFails:
+    """The disks are already written by then, so the failure has to be scoped.
+
+    Recording which cartridges the reader owns runs after the images exist. A
+    failure there is a missing convenience, not a bad disk, and saying so is the
+    difference between the reader re-running the build and moving on.
+    """
+
+    def test_the_disks_are_reported_as_unaffected(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(wizard, "_inspect", lambda folder: (15, 15, [], [], []))
+        monkeypatch.setattr(wizard, "_describe_plan", lambda console, source: 2)
+        console = Scripted(["1", str(tmp_path / "out"), "y", "n", "y"])
+
+        def act(action, source, output, patches):
+            return 1 if action == wizard.ACTION_INVENTORY else 0
+
+        wizard.run(console, source=tmp_path, runner=act, supplied=tmp_path)
+
+        assert any("Recording did not finish" in line for line in console.written)
+
+
+class TestTheFoldersOffered:
+    """The first question is a pick rather than a prompt to type a path.
+
+    What qualifies is a folder holding games, or one whose children do, so the
+    reader who keeps `roms/usa` and `roms/japan` is offered `roms`. A working
+    directory holding nothing offers nothing, which is the case that leaves the
+    reader typing and so is the one worth being sure about.
+    """
+
+    def games_in(self, folder):
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "game.z64").write_bytes(b"x")
+        return folder
+
+    def test_a_working_directory_holding_games_is_offered(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        cwd = self.games_in(tmp_path / "roms")
+
+        assert cwd in wizard.candidate_folders(home, cwd)
+
+    def test_a_working_directory_holding_nothing_offers_nothing(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        empty = tmp_path / "empty"
+        empty.mkdir()
+
+        assert wizard.candidate_folders(home, empty) == []
+
+    def test_a_child_holding_games_is_offered(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        cwd = tmp_path / "roms"
+        cwd.mkdir()
+        self.games_in(cwd / "usa")
+
+        assert (cwd / "usa") in wizard.candidate_folders(home, cwd)
+
+
+class TestAWorkingDirectoryThatIsNotOne:
+    def test_nothing_is_offered_from_it(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+
+        assert wizard.candidate_folders(home, tmp_path / "not-a-folder") == []
+
+
+class TestDescribingAPlan:
+    """The summary printed before anything is written, over two collections.
+
+    One where every game runs from the disk alone, and one where a game needs
+    hardware. The first is the common case and the branch that skips the whole
+    hardware paragraph, which is the one a reader sees most and the one no test
+    covered.
+    """
+
+    def collection(self, tmp_path, *, cart):
+        """A ROM whose checksum validates, so its boot chip is known.
+
+        An unresolvable boot chip is itself something the reader has to act on,
+        so an unsealed synthetic ROM always produces a requirement and never
+        reaches the branch where the collection needs nothing.
+        """
+        from n64_video_interface import vi
+
+        from z64kit.conftest import make_rom
+
+        root = tmp_path / "roms"
+        root.mkdir(exist_ok=True)
+        sealed = vi.reseal(make_rom(title=f"GAME {cart}", cart=cart, size=8 * 1024 * 1024))
+        (root / f"Game {cart}.z64").write_bytes(sealed)
+        return root
+
+    def test_a_collection_needing_nothing_prints_no_hardware_paragraph(self, tmp_path):
+        console = Scripted([])
+
+        wizard._describe_plan(console, str(self.collection(tmp_path, cart="AA")))
+
+        assert not any("beyond the disk" in line for line in console.written)
+
+    def test_it_still_reports_the_size_and_the_disk_count(self, tmp_path):
+        console = Scripted([])
+
+        disks = wizard._describe_plan(console, str(self.collection(tmp_path, cart="AA")))
+
+        assert disks == 1
+        assert any("They fit on 1 disk" in line for line in console.written)

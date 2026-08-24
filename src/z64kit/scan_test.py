@@ -161,3 +161,42 @@ class TestTotals:
     def test_a_missing_folder_is_reported_clearly(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             scan.scan(tmp_path / "nope")
+
+
+class TestALittleEndianDump:
+    """The one byte order the unit's extension table does not list.
+
+    A .n64 dump loads as garbage rather than failing cleanly, so the scan says
+    so by name instead of leaving the reader to find out on hardware.
+    """
+
+    def test_it_is_named_in_the_warnings(self, tmp_path):
+        """The dump is little endian and the filename says otherwise.
+
+        A file actually named `.n64` is skipped on its extension before this
+        line is reached. The case that gets here is a little endian dump wearing
+        a `.z64` name, which is the one that would otherwise load as garbage.
+        """
+        from z64kit.conftest import make_rom
+
+        root = tmp_path / "roms"
+        root.mkdir()
+        (root / "Game (USA).z64").write_bytes(make_rom(order="n64"))
+
+        found = scan.scan(str(root))
+
+        assert any("little endian" in warning for warning in found.warnings)
+
+
+class TestAHiddenFile:
+    def test_it_is_recorded_as_skipped_rather_than_scanned(self, tmp_path):
+        from z64kit.conftest import make_rom
+
+        root = tmp_path / "roms"
+        root.mkdir()
+        (root / ".DS_Store").write_bytes(b"junk")
+        (root / "Game (USA).z64").write_bytes(make_rom())
+
+        found = scan.scan(str(root))
+
+        assert any(one.reason == "hidden file" for one in found.skipped)

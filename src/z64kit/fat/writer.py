@@ -110,9 +110,6 @@ class Volume:
             offset = image.fat_lba(copy) * image.SECTOR + cluster * 2
             struct.pack_into("<H", self._data, offset, value)
 
-    def _fat_limit(self) -> int:
-        return image.cluster_count() + 2
-
     def free_clusters(self) -> int:
         return sum(1 for c in range(2, image.cluster_count() + 2) if self._fat_get(c) == 0)
 
@@ -141,7 +138,9 @@ class Volume:
         if cluster == ROOT:
             start = image.root_lba() * image.SECTOR
             return self._data[start : start + image.root_sectors() * image.SECTOR]
-        if cluster not in self._dir_buffers:
+        if (
+            cluster not in self._dir_buffers
+        ):  # pragma: no cover -- make_dir caches every non-root cluster before anything can read it
             buffer = bytearray()
             for part in self._chain(cluster):
                 start = self._cluster_lba(part) * image.SECTOR
@@ -153,7 +152,9 @@ class Volume:
         if cluster == ROOT:
             start = image.root_lba() * image.SECTOR
             span = image.root_sectors() * image.SECTOR
-            if len(buffer) > span:
+            if (
+                len(buffer) > span
+            ):  # pragma: no cover -- _add_entry refuses a full root before the buffer can grow
                 raise DirectoryFullError(f"root holds {image.ROOT_ENTRIES} entries")
             self._data[start : start + span] = buffer.ljust(span, b"\x00")
         else:
@@ -202,7 +203,9 @@ class Volume:
             raise DirectoryFullError(f"root holds {image.ROOT_ENTRIES} entries")
         extra = self._allocate(1)[0]
         self._fat_set(extra, END_OF_CHAIN)
-        for existing in self._chain(parent):
+        for existing in self._chain(
+            parent
+        ):  # pragma: no branch -- the chain always ends in END_OF_CHAIN, so this breaks
             if self._fat_get(existing) == END_OF_CHAIN and existing != extra:
                 self._fat_set(existing, extra)
                 break

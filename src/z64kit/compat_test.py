@@ -166,3 +166,34 @@ class TestSummarise:
 
         assert summary.counts == {}
         assert summary.donors_needed == ()
+
+
+class TestATitleTooLargeWithNothingToAdd:
+    """The oversize refusal, with and without a note explaining the title.
+
+    Some oversized titles carry a note naming why. Most do not, and the sentence
+    still has to end cleanly rather than trailing the empty note into it.
+    """
+
+    def test_a_verdict_with_a_note_carries_it(self):
+        rules = compat.load_rules()
+        verdict = compat.Verdict(
+            key="big.z64",
+            title="Big Game",
+            status=compat.STATUS_TOO_LARGE,
+            blocked=True,
+            note="it shipped on a 512 Mbit board",
+        )
+
+        assert "512 Mbit board" in compat.requirement_for(verdict, rules)
+
+    def test_a_verdict_without_one_still_reads_as_a_sentence(self):
+        rules = compat.load_rules()
+        verdict = compat.Verdict(
+            key="big.z64", title="Big Game", status=compat.STATUS_TOO_LARGE, blocked=True, note=""
+        )
+
+        sentence = compat.requirement_for(verdict, rules)
+
+        assert sentence.endswith(".")
+        assert "too large" in sentence.lower()

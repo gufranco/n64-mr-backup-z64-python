@@ -325,3 +325,55 @@ class TestEveryTimestampFieldCarriesTheFixedStamp:
 
     def test_two_builds_still_produce_identical_bytes(self):
         assert self.entry_for() == self.entry_for()
+
+
+class TestSubdirectories:
+    """The volume this project builds is flat, and the writer supports more.
+
+    `make_dir` and the code that grows a directory past one cluster are reachable
+    through the public API even though nothing in this project calls them. Left
+    untested they are the part of the FAT writer most likely to be wrong the day
+    somebody does.
+    """
+
+    def test_a_directory_can_be_made_and_listed(self):
+        volume = writer.Volume()
+
+        cluster = volume.make_dir(writer.ROOT, "SAVES")
+
+        assert cluster != writer.ROOT
+        assert any(writer.display_name(e.name).startswith("SAVES") for e in volume.list_dir())
+
+    def test_a_file_written_into_it_reads_back(self):
+        volume = writer.Volume()
+        cluster = volume.make_dir(writer.ROOT, "SAVES")
+
+        volume.add_file(cluster, "GAME", "EEP", b"save data")
+
+        assert volume.read_file("GAME", "EEP", parent=cluster) == b"save data"
+
+    def test_two_directories_of_the_same_name_collide(self):
+        volume = writer.Volume()
+        volume.make_dir(writer.ROOT, "SAVES")
+
+        with pytest.raises(writer.NameCollisionError):
+            volume.make_dir(writer.ROOT, "SAVES")
+
+    def test_it_grows_past_one_cluster_when_it_has_to(self):
+        volume = writer.Volume()
+        cluster = volume.make_dir(writer.ROOT, "MANY")
+        per_cluster = (image.SECTORS_PER_CLUSTER * image.SECTOR) // writer.ENTRY_SIZE
+
+        for index in range(per_cluster * 2 + 4):
+            volume.add_file(cluster, f"F{index:07d}"[:8], "BIN", b"x")
+
+        assert len(volume.list_dir(cluster)) >= per_cluster * 2 + 4
+
+
+class TestARootThatCannotHoldAnother:
+    def test_it_refuses_rather_than_overwriting(self):
+        volume = writer.Volume()
+
+        with pytest.raises(writer.DirectoryFullError, match="root holds"):
+            for index in range(image.ROOT_ENTRIES + 2):
+                volume.add_file(writer.ROOT, f"F{index:07d}"[:8], "BIN", b"x")
