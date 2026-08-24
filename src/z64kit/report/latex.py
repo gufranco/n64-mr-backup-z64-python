@@ -29,7 +29,10 @@ _ESCAPES = {
 
 PREAMBLE = r"""\documentclass[9pt,a4paper]{extarticle}
 \usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+\fi
 \usepackage[a4paper,margin=12mm,bottom=14mm]{geometry}
 \usepackage{longtable}
 \usepackage{booktabs}

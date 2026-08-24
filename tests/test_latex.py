@@ -307,3 +307,60 @@ class TestATableCarriesItsHeadingAcrossAPageBreak:
 
         assert "multicolumn" not in out
         assert "continued" not in out
+
+
+class TestTheEngineGuardedPreamble:
+    """`inputenc` belongs to 8-bit engines only, and this document targets four.
+
+    pdflatex reads the source a byte at a time and needs `inputenc` to make sense
+    of a UTF-8 apostrophe, which the catalogue is full of. XeTeX and LuaTeX read
+    Unicode natively, ignore the package, and say so in the log on every run.
+
+    Loading it unconditionally therefore means one engine needs it and three warn
+    about it. The guard keeps the byte-for-byte pdflatex behaviour and takes the
+    warning off the other three, which is the only reason to touch a preamble
+    that renders correctly today.
+    """
+
+    def test_inputenc_is_not_loaded_unconditionally(self):
+        from z64kit.report import latex
+
+        body = latex.PREAMBLE.split(r"\ifPDFTeX")[0]
+
+        assert "inputenc" not in body
+
+    def test_iftex_is_loaded_before_the_guard(self):
+        from z64kit.report import latex
+
+        assert latex.PREAMBLE.index(r"\usepackage{iftex}") < latex.PREAMBLE.index(r"\ifPDFTeX")
+
+    def test_pdflatex_still_gets_inputenc(self):
+        from z64kit.report import latex
+
+        guarded = latex.PREAMBLE.split(r"\ifPDFTeX")[1].split(r"\fi")[0]
+
+        assert r"\usepackage[utf8]{inputenc}" in guarded
+
+    def test_fontenc_stays_outside_the_guard(self):
+        """It draws the ligatures and never warns, so moving it changes the page.
+
+        Guarding it too silences nothing and swaps the font under XeTeX, which
+        drops every fi and ff ligature the catalogue has always rendered.
+        """
+        from z64kit.report import latex
+
+        body = latex.PREAMBLE.split(r"\ifPDFTeX")[0]
+
+        assert r"\usepackage[T1]{fontenc}" in body
+
+    def test_the_guard_is_closed(self):
+        from z64kit.report import latex
+
+        assert latex.PREAMBLE.count(r"\ifPDFTeX") == latex.PREAMBLE.count(r"\fi")
+
+    def test_the_rendered_document_carries_the_guard(self):
+        from z64kit.report import latex
+
+        document = latex.document(title="Title", subtitle="", body="body")
+
+        assert r"\ifPDFTeX" in document
