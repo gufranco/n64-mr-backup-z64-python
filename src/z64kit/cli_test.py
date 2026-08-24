@@ -2271,3 +2271,169 @@ class TestTheMergeReport:
         cli.main(["merge", str(rom_path), str(patch_path), "--no-aa"])
 
         assert "more" in capsys.readouterr().out
+
+
+class TestTheArtifactsReport:
+    """What `artifacts` prints for a folder holding more than this collection needs.
+
+    The manifest names every patch the platform has. A reader who keeps them all
+    is not missing anything, and saying so is different from saying the folder is
+    complete: the extra files are verified too, they are just for other games.
+    """
+
+    def test_extra_verified_files_are_counted_separately(self, capsys):
+        cli.main(["artifacts", "--folder", "patches"])
+
+        assert "more verified, for games not in this collection" in capsys.readouterr().out
+
+    def test_narrowing_to_a_collection_changes_what_is_expected(self, collection, capsys):
+        cli.main(["artifacts", "--folder", "patches", "--source", str(collection)])
+        narrowed = capsys.readouterr().out
+
+        cli.main(["artifacts", "--folder", "patches"])
+        whole = capsys.readouterr().out
+
+        assert narrowed != whole
+
+
+class TestAFolderHoldingSomethingThatIsNotAFile:
+    def test_it_is_passed_over_when_indexing_patches(self, tmp_path):
+        (tmp_path / "a-directory").mkdir()
+
+        assert cli._existing_patch_index(str(tmp_path)) == {}
+
+
+class TestTheGuidedFlowAskingToWrite:
+    """The last step of the wizard, which hands off to the write command.
+
+    It is the only place the guided flow can destroy something, and the step was
+    reachable only by answering five questions, so nothing had exercised the
+    hand-off itself.
+    """
+
+    def test_it_calls_the_write_command_with_the_image_it_built(self, tmp_path, monkeypatch):
+        seen = {}
+
+        def fake_write(args):
+            seen["image"] = args.image
+            seen["device"] = args.device
+            return 0
+
+        monkeypatch.setattr(cli, "cmd_write", fake_write)
+
+        code = cli._run_step(
+            cli.wizard.ACTION_WRITE, str(tmp_path / "disk.img"), str(tmp_path), "disk9"
+        )
+
+        assert code == 0
+        assert seen["image"].endswith("disk.img")
+        assert seen["device"] == "disk9"
+
+
+class TestBindingsThatCannotBeResolved:
+    """A patch whose binding cannot be worked out is indexed under nothing.
+
+    A sidecar that is not a header, and a payload wearing the APS magic that
+    will not parse, both leave the tool with no key. Indexing them under a wrong
+    key would attach a patch to a game it was not built for, so the answer is to
+    leave them out.
+    """
+
+    def test_a_sidecar_that_is_not_a_header_falls_through_to_the_payload(self):
+        from z64kit import aps
+        from z64kit.conftest import make_rom
+
+        rom = make_rom()
+        payload = aps.build(rom, rom, description="stand in")
+
+        assert cli._binding_key(b"not a header at all", payload) is not None
+
+    def test_a_loose_patch_with_no_resolvable_binding_is_left_out(self, tmp_path):
+        (tmp_path / "broken.aps").write_bytes(b"APS10" + b"truncated")
+
+        assert cli._existing_patch_index(str(tmp_path)) == {}
+
+    def test_a_database_member_whose_header_is_not_one_is_left_out(self, tmp_path):
+        import zipfile
+
+        from z64kit import artifacts
+
+        with zipfile.ZipFile(tmp_path / artifacts.PATCH_DATABASE, "w") as archive:
+            archive.writestr("ZPFINFO", b"3.0")
+            archive.writestr("thing.hdr", bytes(64))
+            archive.writestr("thing.aps", b"APS10" + b"body")
+
+        assert cli._existing_patch_index(str(tmp_path)) == {}
+
+
+class TestWritingAPatchFolderWithNoLibrary:
+    def test_only_the_emitted_patches_land(self, tmp_path):
+        out = tmp_path / "out"
+
+        written = cli._write_patch_folder(out, None, [("one.aps", b"APS10")], {})
+
+        assert written == 1
+        assert (out / "one.aps").read_bytes() == b"APS10"
+
+
+class TestReportingWhenTheShapeIsUnusual:
+    """Three branches that only appear when the data is shaped the other way.
+
+    A question with no example cartridge to name, a unit that does not hold one
+    save per cartridge, and a donor the catalogue has no cartridge for. None
+    occurs with the manifest as it ships, and all three are one `if` away from
+    the path that does.
+    """
+
+    def test_a_question_with_no_example_prints_no_example(
+        self, collection, tmp_path, monkeypatch, capsys
+    ):
+        from z64kit import inventory
+
+        real = inventory.questions
+
+        def stripped(games, rules):
+            return tuple(
+                inventory.Question(
+                    key=q.key, label=q.label, prompt=q.prompt, examples=(), unlocks=q.unlocks
+                )
+                for q in real(games, rules)
+            )
+
+        monkeypatch.setattr(inventory, "questions", stripped)
+
+        cli.main(["inventory", str(collection), "--file", str(tmp_path / "inv.json")])
+
+        assert "for example:" not in capsys.readouterr().out
+
+    def test_a_unit_holding_more_than_one_save_says_nothing_about_it(
+        self, collection, tmp_path, monkeypatch, capsys
+    ):
+        from z64kit import inventory
+
+        real = inventory.shopping_list
+
+        def relaxed(games, held, rules):
+            out = real(games, held, rules)
+            return type(out)(**{**out.__dict__, "one_save_per_cartridge": False})
+
+        monkeypatch.setattr(inventory, "shopping_list", relaxed)
+
+        cli.main(["inventory", str(collection), "--file", str(tmp_path / "inv.json")])
+
+        assert "One cartridge holds one game save" not in capsys.readouterr().out
+
+    def test_a_donor_the_catalogue_has_no_cartridge_for_is_omitted(self, monkeypatch):
+        from z64kit import compat, donors, inventory, scan
+
+        monkeypatch.setattr(donors, "catalogued", lambda catalogue, tag, owned=None: ())
+        rules = compat.load_rules()
+        games = [compat.Candidate(key="dk64.z64", title="Donkey Kong 64 (USA)", save="eeprom2k")]
+        shopping = inventory.shopping_list(games, inventory.Inventory(), rules)
+
+        purchasable, note = cli._purchasable_donors(
+            rules, shopping, scan.Collection(root="nowhere")
+        )
+
+        assert purchasable == {}
+        assert note == ""

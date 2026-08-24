@@ -10,8 +10,8 @@
 [![CI](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml)
 [![Analysis](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/analysis.yml/badge.svg)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/analysis.yml)
 [![Scorecard](https://api.scorecard.dev/projects/github.com/gufranco/n64-mr-backup-z64-python/badge)](https://scorecard.dev/viewer/?uri=github.com/gufranco/n64-mr-backup-z64-python)
-[![Coverage](https://img.shields.io/badge/coverage-95%25%20statement%20%2B%20branch-brightgreen)](#running-the-tests)
-[![Tests](https://img.shields.io/badge/tests-1%2C096-brightgreen)](#running-the-tests)
+[![Coverage](https://img.shields.io/badge/coverage-100%25%20statement%20%2B%20branch-brightgreen)](#running-the-tests)
+[![Tests](https://img.shields.io/badge/tests-1%2C206-brightgreen)](#running-the-tests)
 [![Types](https://img.shields.io/badge/mypy-strict-blue)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE.txt)
 
@@ -26,7 +26,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**13** commands · **1,096** tests · **95%** statement and branch coverage · **byte-reproducible** images · **zero** third-party runtime dependencies · types checked **strict**
+**13** commands · **1,206** tests · **100%** statement and branch coverage · **byte-reproducible** images · **zero** third-party runtime dependencies · types checked **strict**
 
 ```console
 $ z64kit doctor
@@ -355,6 +355,7 @@ src/z64kit/
   db.py           # save-type catalogue, fetched not bundled
   burn.py         # writing a disk, and every reason to refuse to
   cli.py          # the command line
+  *_test.py       # each module's tests, beside the module
   fat/            # FAT16 volume construction, verification, and disk payloads
   report/         # LaTeX catalogue and rendering
   data/           # manifests. No payloads
@@ -374,8 +375,8 @@ Download ZIP button cannot work.
 
 | Suite | Command | Covers |
 |:------|:--------|:-------|
-| Everything | `pytest` | 1,096 tests. No environment to set up: the paths are in [`pyproject.toml`](pyproject.toml) |
-| Coverage | `pytest --cov` | The 95% statement and branch gate, enforced by its own CI job |
+| Everything | `pytest` | 1,206 tests. No environment to set up: the paths are in [`pyproject.toml`](pyproject.toml) |
+| Coverage | `pytest --cov` | The 100% statement and branch gate, enforced by its own CI job |
 | Lint and format | `ruff check . && ruff format --check .` | Style and static analysis |
 | Types | `mypy` | Strict, with every optional error class the version offers |
 
@@ -391,7 +392,7 @@ checker changing its mind about code nobody touched.
 |:-----------|:-------|
 | Commit format | [Conventional Commits](https://www.conventionalcommits.org/) |
 | Lint and format | [ruff](https://docs.astral.sh/ruff/), configured in [`pyproject.toml`](pyproject.toml) |
-| Coverage gate | 95% statement and branch, declared in [`pyproject.toml`](pyproject.toml) and run by its own CI job |
+| Coverage gate | 100% statement and branch, declared in [`pyproject.toml`](pyproject.toml) and run by its own CI job |
 | Submodule | `--recurse-submodules` on clone. The archive download cannot work |
 
 ### Non-obvious decisions
