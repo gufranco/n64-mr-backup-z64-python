@@ -387,7 +387,7 @@ class TestViCommand:
         assert "no video mode table" in out.lower()
 
     def test_reports_a_planted_mode_table(self, tmp_path, capsys):
-        from tests.test_vi import mode_entry
+        from tests.conftest import mode_entry
 
         root = tmp_path / "roms"
         root.mkdir()
@@ -424,9 +424,8 @@ class TestViCommand:
 
 class TestViPatchCommand:
     def sealed_rom(self, path, ctrl=0x0000311E):
-        from tests.test_vi import mode_entry
-
-        from z64kit import vi
+        from n64_video_interface import vi
+        from tests.conftest import mode_entry
 
         base = bytearray(make_rom(size=vi.CHECKSUM_END + 0x2000, cart="GG"))
         entry = mode_entry(ctrl=ctrl)
@@ -465,7 +464,7 @@ class TestViPatchCommand:
         assert target.read_bytes() == before
 
     def test_the_patched_copy_has_anti_aliasing_off(self, tmp_path):
-        from z64kit import vi
+        from n64_video_interface import vi
 
         root = tmp_path / "roms"
         self.sealed_rom(root / "Game (USA).z64")
@@ -476,7 +475,7 @@ class TestViPatchCommand:
         assert vi.audit((out / "Game (USA).z64").read_bytes()).antialiasing_on == 0
 
     def test_the_patched_copy_carries_a_valid_checksum(self, tmp_path):
-        from z64kit.rom import checksum
+        from n64_video_interface import checksum
 
         root = tmp_path / "roms"
         self.sealed_rom(root / "Game (USA).z64")
@@ -505,7 +504,7 @@ class TestViPatchCommand:
         assert "refused" in capsys.readouterr().out.lower()
 
     def test_combines_several_switches(self, tmp_path):
-        from z64kit import vi
+        from n64_video_interface import vi
 
         root = tmp_path / "roms"
         self.sealed_rom(root / "Game (USA).z64")
@@ -1219,7 +1218,7 @@ def _fake_game(rom: bytes):
     """The two fields patch lookup needs, taken from a real header."""
     import dataclasses
 
-    from z64kit.rom import header
+    from n64_video_interface import header
 
     parsed = header.parse(rom[:64])
 
@@ -1716,3 +1715,180 @@ class TestLeavingAPromptIsNotACrash:
         cli.main(["inventory", str(collection), "--ask", "--file", str(target)])
 
         assert not target.exists()
+
+
+class TestWritingToADisk:
+    """The one command that destroys something, and nothing exercised it.
+
+    `write` erases a Zip disk. Every guard in front of that, the refusal list,
+    the blank-image check, and the typed confirmation, existed on trust: no test
+    proved any of them stops the write, and no test proved the scratch payload
+    is removed afterwards.
+
+    The device layer is faked here because a real one cannot be in CI, but the
+    fakes sit at the boundary `burn` already defines, so what is under test is
+    the decision to write rather than the writing.
+    """
+
+    def device(self):
+        from z64kit import burn
+
+        return burn.Device(
+            node="disk9",
+            size=100 * 1024 * 1024,
+            media="ZIP 100",
+            removable=True,
+            external=True,
+            virtual=False,
+            block="/dev/disk9",
+            raw="/dev/rdisk9",
+        )
+
+    def image(self, tmp_path):
+        from z64kit.fat import image as fat
+
+        made = tmp_path / "master.img"
+        made.write_bytes(fat.blank_image())
+        return made
+
+    def arrange(self, monkeypatch, *, refusals=(), written=None, fails=None):
+        from z64kit import burn
+
+        monkeypatch.setattr(burn, "read_device", lambda node: self.device())
+        monkeypatch.setattr(burn, "refusals", lambda device, expected: tuple(refusals))
+        seen = {}
+
+        def write_image(payload, device, **kwargs):
+            seen["payload"] = payload
+            seen["bytes"] = payload.read_bytes()
+            if fails is not None:
+                raise burn.WriteFailedError(fails)
+            return written or burn.Written(chunks=7, seconds=3, ejected=True)
+
+        monkeypatch.setattr(burn, "write_image", write_image)
+        return seen
+
+    def test_a_missing_image_is_refused(self, tmp_path, capsys):
+        from z64kit import cli
+
+        code = cli.main(["write", str(tmp_path / "nope.img"), "disk9", "--yes"])
+
+        assert code == 1
+        assert "no such image" in capsys.readouterr().out
+
+    def test_a_device_that_cannot_be_read_is_refused(self, tmp_path, monkeypatch, capsys):
+        from z64kit import burn, cli
+
+        def refuse(node):
+            raise burn.DeviceError("nosuchdevice is not a device")
+
+        monkeypatch.setattr(burn, "read_device", refuse)
+
+        code = cli.main(["write", str(self.image(tmp_path)), "nosuchdevice", "--yes", "--empty"])
+
+        assert code == 1
+        assert "not a device" in capsys.readouterr().out
+
+    def test_a_refusal_stops_the_write(self, tmp_path, monkeypatch, capsys):
+        from z64kit import cli
+
+        seen = self.arrange(monkeypatch, refusals=("it is the startup disk",))
+
+        code = cli.main(["write", str(self.image(tmp_path)), "disk9", "--yes", "--empty"])
+        printed = capsys.readouterr().out
+
+        assert code == 1
+        assert "REFUSING TO WRITE" in printed
+        assert "it is the startup disk" in printed
+        assert "payload" not in seen
+
+    def test_a_blank_image_needs_the_flag_that_admits_it(self, tmp_path, monkeypatch, capsys):
+        from z64kit import cli
+
+        seen = self.arrange(monkeypatch)
+
+        code = cli.main(["write", str(self.image(tmp_path)), "disk9", "--yes"])
+
+        assert code == 1
+        assert "would leave a blank disk" in capsys.readouterr().out
+        assert "payload" not in seen
+
+    def test_anything_other_than_yes_aborts(self, tmp_path, monkeypatch, capsys):
+        from z64kit import cli
+
+        seen = self.arrange(monkeypatch)
+        monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+
+        code = cli.main(["write", str(self.image(tmp_path)), "disk9", "--empty"])
+
+        assert code == 1
+        assert "aborted" in capsys.readouterr().out
+        assert "payload" not in seen
+
+    def test_typing_yes_lets_it_through(self, tmp_path, monkeypatch, capsys):
+        from z64kit import cli
+
+        seen = self.arrange(monkeypatch)
+        monkeypatch.setattr("builtins.input", lambda prompt="": "YES")
+
+        code = cli.main(["write", str(self.image(tmp_path)), "disk9", "--empty"])
+        printed = capsys.readouterr().out
+
+        assert code == 0
+        assert "verify      OK, 7 chunks matched" in printed
+        assert "payload" in seen
+
+    def test_leaving_the_prompt_aborts_rather_than_writing(self, tmp_path, monkeypatch, capsys):
+        from z64kit import cli
+
+        seen = self.arrange(monkeypatch)
+        monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(EOFError))
+
+        code = cli.main(["write", str(self.image(tmp_path)), "disk9", "--empty"])
+
+        assert code == 1
+        assert "aborted" in capsys.readouterr().out
+        assert "payload" not in seen
+
+    def test_a_failed_write_says_the_disk_was_ejected(self, tmp_path, monkeypatch, capsys):
+        from z64kit import cli
+
+        self.arrange(monkeypatch, fails="the drive stopped responding")
+
+        code = cli.main(["write", str(self.image(tmp_path)), "disk9", "--yes", "--empty"])
+        printed = capsys.readouterr().out
+
+        assert code == 1
+        assert "STOPPED: the drive stopped responding" in printed
+        assert "can damage the next disk" in printed
+
+    def test_the_scratch_payload_is_removed_even_when_the_write_fails(self, tmp_path, monkeypatch):
+        from z64kit import cli
+
+        seen = self.arrange(monkeypatch, fails="the drive stopped responding")
+
+        cli.main(["write", str(self.image(tmp_path)), "disk9", "--yes", "--empty"])
+
+        assert not seen["payload"].exists()
+
+    def test_the_scratch_payload_is_removed_after_a_good_write(self, tmp_path, monkeypatch):
+        from z64kit import cli
+
+        seen = self.arrange(monkeypatch)
+
+        cli.main(["write", str(self.image(tmp_path)), "disk9", "--yes", "--empty"])
+
+        assert not seen["payload"].exists()
+
+    def test_the_serial_can_be_pinned_so_a_write_is_reproducible(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        from z64kit import cli
+
+        self.arrange(monkeypatch)
+
+        cli.main(
+            ["write", str(self.image(tmp_path)), "disk9", "--yes", "--empty", "--serial", "BEEF"]
+        )
+
+        assert "0000BEEF" in capsys.readouterr().out
