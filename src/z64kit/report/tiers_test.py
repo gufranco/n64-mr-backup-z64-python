@@ -100,3 +100,36 @@ class TestReadingTheDiskNumber:
 
     def test_a_name_with_no_number_has_none(self):
         assert tiers.disk_number("Extras") is None
+
+
+class TestARefusedTierFile:
+    """A hand-edited file, which is the only way this one arrives.
+
+    Nothing generates a tier file. A reader writes it, so every shape a reader
+    can get wrong has to come back as a sentence naming the file rather than as
+    a traceback from json or a KeyError three frames down.
+    """
+
+    def test_something_that_is_not_an_object(self):
+        with pytest.raises(tiers.TierFileError, match="must hold an object"):
+            tiers.parse([1, 2, 3])
+
+    def test_an_object_with_no_tiers_list(self):
+        with pytest.raises(tiers.TierFileError, match="must hold an object"):
+            tiers.parse({"bands": []})
+
+    def test_a_tiers_value_that_is_not_a_list(self):
+        with pytest.raises(tiers.TierFileError, match="must hold an object"):
+            tiers.parse({"tiers": "S,A,B"})
+
+    def test_a_tier_that_is_not_an_object(self):
+        with pytest.raises(tiers.TierFileError, match="must be an object"):
+            tiers.parse({"tiers": ["S"]})
+
+
+class TestABandWithNoLabel:
+    def test_the_heading_is_just_the_tier_name(self):
+        assert tiers.Band(name="S", label="", through_disk=4).heading == "S-tier"
+
+    def test_a_label_is_appended_when_there_is_one(self):
+        assert tiers.Band(name="S", label="Best", through_disk=4).heading == "S-tier: Best"

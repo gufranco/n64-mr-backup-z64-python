@@ -252,3 +252,20 @@ class TestToggleList:
     def test_quitting_raises_a_cancellation(self):
         with pytest.raises(prompts.Cancelled):
             prompts.toggle_list(Scripted(["q"]), "own?", ["a"])
+
+
+class TestATokenThatIsNotANumber:
+    """The list is ticked by typing numbers, and a person types other things.
+
+    A stray word in an otherwise valid answer has to be named and skipped, not
+    swallowed and not fatal, because the rest of the line is still a valid
+    selection and retyping it is the annoyance this flow exists to avoid.
+    """
+
+    def test_it_is_named_and_the_rest_of_the_line_still_counts(self):
+        console = Scripted(["1 banana 2", ""])
+
+        picked = prompts.toggle_list(console, "Tick:", ["one", "two", "three"])
+
+        assert picked == {0, 1}
+        assert any("'banana' is not a number" in line for line in console.written)

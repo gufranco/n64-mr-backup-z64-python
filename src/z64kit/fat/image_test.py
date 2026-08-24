@@ -256,3 +256,28 @@ class TestNoVolumeLabel:
         first = raw[self.root_at(raw) : self.root_at(raw) + 11]
 
         assert first == b"GAME    Z64"
+
+
+class TestAnAddressBeyondWhatChsCanHold:
+    """CHS runs out at cylinder 1023 and the table still has to say something.
+
+    A Zip 100 never reaches it, but the conversion is what the partition entry
+    is built from, and the convention when it overflows is the maximum rather
+    than a wrapped value that would point somewhere real and wrong.
+    """
+
+    def test_it_saturates_rather_than_wrapping(self):
+        beyond = 1024 * image.HEADS * image.SECTORS_PER_TRACK
+
+        head, sector, cylinder = image.lba_to_chs(beyond)
+
+        assert head == image.HEADS - 1
+        assert cylinder == 1023 & 0xFF
+        assert sector & 0x3F == image.SECTORS_PER_TRACK
+
+    def test_an_address_inside_the_range_is_converted_exactly(self):
+        head, sector, cylinder = image.lba_to_chs(image.SECTORS_PER_TRACK)
+
+        assert head == 1
+        assert sector & 0x3F == 1
+        assert cylinder == 0

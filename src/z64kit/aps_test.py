@@ -197,3 +197,32 @@ class TestShortRom:
     def test_refuses_to_read_checksums_from_a_short_rom(self):
         with pytest.raises(ValueError, match="header"):
             aps.target_checksums(bytes(4))
+
+
+class TestApplyingAPatchToTheWrongRom:
+    """The binding is checked before a byte is written, when asked to check it.
+
+    A patch carries the checksums of the ROM it was built against. Applying it
+    to a different dump produces a file that boots into whatever the records
+    happened to overwrite, so the refusal names which half of the pair differs
+    rather than saying the patch is bad.
+    """
+
+    def _rom(self, crc1: int, crc2: int) -> bytes:
+        from z64kit.conftest import make_rom
+
+        return make_rom(crc1=crc1, crc2=crc2)
+
+    def test_a_first_checksum_that_does_not_match_is_refused(self):
+        built = aps.build(self._rom(0x11111111, 0x22222222), self._rom(0x11111111, 0x22222222))
+        parsed = aps.parse(built)
+
+        with pytest.raises(aps.TargetMismatchError, match="CRC1 mismatch"):
+            aps.apply(self._rom(0x99999999, 0x22222222), parsed, verify=True)
+
+    def test_a_second_checksum_that_does_not_match_is_refused(self):
+        built = aps.build(self._rom(0x11111111, 0x22222222), self._rom(0x11111111, 0x22222222))
+        parsed = aps.parse(built)
+
+        with pytest.raises(aps.TargetMismatchError, match="CRC2 mismatch"):
+            aps.apply(self._rom(0x11111111, 0x99999999), parsed, verify=True)

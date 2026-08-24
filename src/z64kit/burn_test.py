@@ -554,3 +554,131 @@ class TestTheCommandsMatchThePlatform:
         assert "on_macos" not in code
         assert "diskutil" not in code
         assert "lsblk" not in code
+
+
+class TestTheBoundaryWithTheSystem:
+    """Every place this shells out, which is where it stops being testable by luck.
+
+    Reading a device, unmounting it, ejecting it and asking whether sudo will
+    answer are all one subprocess call each. They are trivial and they are also
+    the only code here that can be wrong in a way the rest of the suite cannot
+    see, because everything above them takes a Device that a test built.
+    """
+
+    def device(self):
+        return burn.Device(
+            node="disk9",
+            size=100 * 1024 * 1024,
+            media="ZIP 100",
+            removable=True,
+            external=True,
+            virtual=False,
+            block="/dev/disk9",
+            raw="/dev/rdisk9",
+        )
+
+    def answering(self, monkeypatch, *, code=0, out=b""):
+        seen = []
+
+        def fake(command, **kwargs):
+            seen.append(command)
+            return subprocess.CompletedProcess(command, code, out, b"")
+
+        monkeypatch.setattr(burn, "_run", fake)
+        return seen
+
+    def test_a_label_the_report_does_not_carry_reads_as_empty(self):
+        assert burn._field("Device Node: disk9\n", "Nothing Like This") == ""
+
+    def test_running_a_command_returns_what_it_printed(self):
+        import sys
+
+        done = burn._run([sys.executable, "-c", "print('hi')"])
+
+        assert done.returncode == 0
+        assert done.stdout.strip() == b"hi"
+
+    def test_privilege_is_whatever_sudo_answers(self, monkeypatch):
+        self.answering(monkeypatch, code=0)
+        assert burn.have_privilege() is True
+
+        self.answering(monkeypatch, code=1)
+        assert burn.have_privilege() is False
+
+    def test_unmounting_runs_the_command_for_this_platform(self, monkeypatch):
+        seen = self.answering(monkeypatch)
+
+        burn.unmount(self.device())
+
+        assert seen and any("disk9" in part for part in seen[0])
+
+    def test_ejecting_reports_whether_it_worked(self, monkeypatch):
+        self.answering(monkeypatch, code=0)
+        assert burn.eject(self.device()) is True
+
+        self.answering(monkeypatch, code=1)
+        assert burn.eject(self.device()) is False
+
+
+class TestReadingADevice:
+    """The four ways asking the system about a disk can go, on both platforms."""
+
+    MAC = (
+        "Device Node: /dev/disk9\n"
+        "Disk Size: 100.7 MB (100663296 Bytes)\n"
+        "Device / Media Name: ZIP 100\n"
+        "Removable Media: Removable\n"
+        "Device Location: External\n"
+        "Virtual: No\n"
+    )
+    LINUX = (
+        '{"blockdevices":[{"name":"sdb","size":100663296,"rm":true,'
+        '"model":"ZIP 100","tran":"usb","type":"disk"}]}'
+    )
+
+    def arrange(self, monkeypatch, *, macos, tool=True, code=0, out=b""):
+        monkeypatch.setattr(burn, "on_macos", lambda: macos)
+        monkeypatch.setattr(burn.shutil, "which", lambda name: "/usr/bin/x" if tool else None)
+        monkeypatch.setattr(
+            burn, "_run", lambda command, **kw: subprocess.CompletedProcess(command, code, out, b"")
+        )
+
+    def test_macos_without_diskutil_says_so(self, monkeypatch):
+        self.arrange(monkeypatch, macos=True, tool=False)
+
+        with pytest.raises(burn.DeviceError, match="diskutil was not found"):
+            burn.read_device("disk9")
+
+    def test_linux_without_lsblk_says_so(self, monkeypatch):
+        self.arrange(monkeypatch, macos=False, tool=False)
+
+        with pytest.raises(burn.DeviceError, match="lsblk was not found"):
+            burn.read_device("sdb")
+
+    def test_a_device_the_tool_does_not_know_is_refused(self, monkeypatch):
+        self.arrange(monkeypatch, macos=True, code=1)
+
+        with pytest.raises(burn.DeviceError, match="no such device"):
+            burn.read_device("disk9")
+
+    def test_a_device_linux_does_not_know_is_refused(self, monkeypatch):
+        self.arrange(monkeypatch, macos=False, code=1)
+
+        with pytest.raises(burn.DeviceError, match="no such device"):
+            burn.read_device("sdb")
+
+    def test_macos_reports_a_disk(self, monkeypatch):
+        self.arrange(monkeypatch, macos=True, out=self.MAC.encode())
+
+        found = burn.read_device("disk9")
+
+        assert found.media == "ZIP 100"
+        assert found.removable is True
+
+    def test_linux_reports_a_disk(self, monkeypatch):
+        self.arrange(monkeypatch, macos=False, out=self.LINUX.encode())
+
+        found = burn.read_device("sdb")
+
+        assert found.media == "ZIP 100"
+        assert found.removable is True
