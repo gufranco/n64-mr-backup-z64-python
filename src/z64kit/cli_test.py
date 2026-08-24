@@ -1881,3 +1881,155 @@ class TestWritingToADisk:
         )
 
         assert "0000BEEF" in capsys.readouterr().out
+
+
+class TestTheSmallGuards:
+    """The one-line refusals scattered through the command line.
+
+    Each is a branch that returns nothing rather than raising, so a caller sees
+    an empty result instead of a traceback. They are trivial to read and the
+    only proof they behave is a test, because nothing upstream can produce the
+    input that reaches them.
+    """
+
+    def game(self, **over):
+        base = {
+            "path": "x.z64",
+            "filename": "x.z64",
+            "disk": None,
+            "size": 8 * 1024 * 1024,
+            "extension": "z64",
+            "true_extension": "z64",
+            "byte_order": "z64",
+            "internal_name": "X",
+            "cart_id": "XX",
+            "region": "USA",
+            "region_code": "E",
+            "version": 0,
+            "crc1": "11111111",
+            "crc2": "22222222",
+            "game_code": "NXX",
+            "cic": "6102",
+            "checksum_valid": True,
+            "sha256": "0" * 64,
+            "identity_key": b"k",
+        }
+        from z64kit import scan
+
+        return scan.Game(**{**base, **over})
+
+    def test_an_empty_collection_lays_out_no_disks(self):
+        from z64kit import scan
+
+        assert cli._layout(scan.Collection(root="nowhere")) == []
+
+    def test_a_patch_that_is_not_readable_binds_to_nothing(self):
+        assert cli._binding_key(None, b"APS10" + b"truncated") is None
+
+    def test_a_payload_that_is_no_format_binds_to_nothing(self):
+        assert cli._binding_key(None, b"not a patch at all") is None
+
+    def test_a_game_whose_checksum_is_not_hex_matches_no_patch(self):
+        assert cli._patches_for({}, self.game(crc1="zzzz")) == []
+
+    def test_and_matches_no_existing_patch_either(self):
+        assert cli._existing_for({}, self.game(crc1="zzzz")) is None
+
+
+class TestThePatchFolderIndex:
+    def test_no_folder_named_means_no_index(self):
+        assert cli._existing_patch_index(None) == {}
+
+    def test_a_folder_that_is_not_there_stops_rather_than_building_nothing(self, tmp_path):
+        with pytest.raises(cli.PatchFolderMissingError, match="does not exist"):
+            cli._existing_patch_index(str(tmp_path / "absent"))
+
+    def test_a_file_that_is_not_a_patch_is_passed_over(self, tmp_path):
+        (tmp_path / "notes.txt").write_text("nothing to see", encoding="utf-8")
+
+        assert cli._existing_patch_index(str(tmp_path)) == {}
+
+
+class TestEveryVideoSwitchReachesTheRequest:
+    def test_gamma_is_carried_like_the_others(self):
+        args = cli.build_parser().parse_args(
+            ["vi", "src", "--no-gamma", "--no-aa", "--no-divot", "--no-gamma-dither", "--no-dither"]
+        )
+
+        assert cli._vi_requests(args) == {
+            "antialiasing": False,
+            "divot": False,
+            "gamma_dither": False,
+            "gamma": False,
+            "dither_filter": False,
+        }
+
+
+class TestAnIncompleteCommandLine:
+    def test_the_parser_refuses_an_unknown_command(self):
+        with pytest.raises(SystemExit):
+            cli.build_parser().parse_args(["no-such-command"])
+
+
+class TestArtifactsAgainstACollection:
+    """`artifacts --source` narrows the manifest to what these games need.
+
+    Without it the report names every patch the platform has, which buries the
+    handful that matter. The narrowing is the whole point of the flag and it had
+    no test, so neither did the line that prints how many were needed.
+    """
+
+    def test_doctor_reports_how_many_the_collection_needs(self, collection, capsys):
+        assert cli.main(["doctor", "--folder", "patches", "--source", str(collection)]) == 0
+        assert "needed by the games in" in capsys.readouterr().out
+
+    def test_doctor_without_a_source_reports_the_whole_manifest(self, capsys):
+        cli.main(["doctor", "--folder", "patches"])
+
+        assert "needed by the games in" not in capsys.readouterr().out
+
+    def test_the_checksums_of_a_collection_are_read_from_it(self, collection):
+        found = cli._collection_checksums(str(collection))
+
+        assert found
+        assert all(len(a) == 8 and len(b) == 8 for a, b in found)
+
+    def test_no_source_means_no_checksums(self):
+        assert cli._collection_checksums(None) is None
+
+
+class TestDoctorWithoutATexEngine:
+    def test_it_names_the_one_to_install(self, monkeypatch, capsys):
+        from z64kit.report import render
+
+        monkeypatch.setattr(render, "find_engine", lambda prefer=None: None)
+
+        cli.main(["doctor"])
+
+        assert "install tectonic" in capsys.readouterr().out
+
+
+class TestTheDonorListWithoutTheCatalogue:
+    """The catalogue is fetched, so its absence is a normal state.
+
+    A document that omits the list is more use than one that refuses to render,
+    and the reader needs to be told which command fetches it or the omission
+    reads as the list not existing.
+    """
+
+    def test_the_reader_is_told_which_command_fetches_it(self, monkeypatch):
+        from z64kit import compat, db, inventory, scan
+
+        monkeypatch.setattr(db, "available", lambda: False)
+        rules = compat.load_rules()
+        games = [
+            compat.Candidate(key="dk64.z64", title="Donkey Kong 64 (USA)", save="eeprom2k"),
+        ]
+        shopping = inventory.shopping_list(games, inventory.Inventory(), rules)
+
+        purchasable, note = cli._purchasable_donors(
+            rules, shopping, scan.Collection(root="nowhere")
+        )
+
+        assert purchasable == {}
+        assert "db-update" in note
