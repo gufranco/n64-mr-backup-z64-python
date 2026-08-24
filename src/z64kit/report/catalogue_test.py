@@ -285,6 +285,14 @@ class TestVideoState:
         assert "anti-aliasing" in state.summary
         assert "dedither" in state.summary
 
+    def test_the_summary_says_what_a_patch_would_do_rather_than_what_was_done(self):
+        """The disks carry unmodified ROMs. A present-tense cell reads as a claim
+        about the copy on the disk, which sent a reader looking for a patch that
+        was never applied."""
+        state = catalogue.Video(modes=8, antialiasing_on=6, dither_requests=1)
+
+        assert state.summary.startswith("could remove ")
+
 
 class TestVideoSection:
     def test_the_document_carries_a_video_section(self):
@@ -306,7 +314,7 @@ class TestVideoSection:
         )
 
         assert "Super Mario 64" in out
-        assert "removes anti-aliasing and dedither" in out
+        assert "could remove anti-aliasing and dedither" in out
 
     def test_no_game_is_listed_twice(self):
         rows = [video_row(title="Super Mario 64", modes=10, antialiasing_on=6, dither_requests=1)]
@@ -499,3 +507,20 @@ class TestTierBands:
         )
 
         assert "-tier" not in out
+
+
+class TestTheDocumentDoesNotClaimAPatchWasApplied:
+    """`build` writes the ROMs unmodified, so any present-tense wording in this
+    document describes something that did not happen to the files on the disk."""
+
+    def document(self):
+        rows = [video_row(title="Super Mario 64", modes=10, antialiasing_on=6, dither_requests=1)]
+        return catalogue.build(
+            rows, rules=compat.load_rules(), held=inventory.Inventory(), generated="today"
+        )
+
+    def test_the_video_section_says_the_roms_are_untouched(self):
+        assert "no video patch is applied" in self.document().lower()
+
+    def test_no_cell_reads_as_a_change_already_made(self):
+        assert "removes anti-aliasing" not in self.document()

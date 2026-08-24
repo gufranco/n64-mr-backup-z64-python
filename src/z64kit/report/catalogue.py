@@ -87,6 +87,11 @@ class Video:
         A bare "AA" left the reader to work out whether it meant the setting was
         on or that it would be removed, and said nothing about the dedither filter
         going with it.
+
+        The conditional wording is load-bearing. `build` writes every ROM byte for
+        byte, so a cell reading "removes anti-aliasing" describes something that
+        did not happen to the copy on the disk, and a reader who checked found no
+        patch where the document said one had been applied.
         """
         if not self.checksum_valid:
             return "refused, no boot chip"
@@ -96,7 +101,7 @@ class Video:
         if self.dither_patchable:
             wanted.append("dedither")
         if wanted:
-            return "removes " + " and ".join(wanted)
+            return "could remove " + " and ".join(wanted)
         return "nothing to remove"
 
 
@@ -172,8 +177,11 @@ def _video_sections(rows: list[Row]) -> list[str]:
     body = [latex.section("Video")]
     body.append(
         latex.note(
-            "The blur on real hardware is mostly the dedither filter, not edge anti-aliasing. "
-            "The two are set in different places, so a game can lose one and keep the other."
+            "No video patch is applied to the ROMs on these disks. They are written byte for "
+            "byte as they were read, and this section reports only what a patch would be able "
+            "to take out. The blur on real hardware is mostly the dedither filter, not edge "
+            "anti-aliasing. The two are set in different places, so a game can lose one and "
+            "keep the other."
         )
     )
     body.append(
