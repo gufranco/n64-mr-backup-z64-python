@@ -226,7 +226,7 @@ jobs:
       # The whole claim of this project is that it identifies copyrighted files
       # rather than carrying them. That claim is worth checking mechanically on
       # every change rather than trusting a reviewer to notice.
-      - name: Nothing copyrighted ships
+      - name: Nothing copyrighted and no tests ship
         run: |
           python - <<'CHECK'
           import re
@@ -237,10 +237,13 @@ jobs:
           wheel = next(Path("dist").glob("*.whl"))
           names = zipfile.ZipFile(wheel).namelist()
           banned = re.compile(r"\.(z64|v64|n64|rom|aps|ips|zps|hdr|ram|eep|fla|sra|img|dat)$", re.I)
-          found = [one for one in names if banned.search(one)]
+          # The tests sit beside the code, so a build config that stopped excluding
+          # them would ship them and nothing else would notice.
+          shipped_tests = re.compile(r"(_test\.py|conftest\.py)$")
+          found = [one for one in names if banned.search(one) or shipped_tests.search(one)]
           print(f"{len(names)} files in {wheel.name}")
           if found:
-              print(f"::error title=Game data in the wheel::{', '.join(found)}")
+              print(f"::error title=Files the wheel must not carry::{', '.join(found)}")
               sys.exit(1)
           CHECK
         shell: bash
