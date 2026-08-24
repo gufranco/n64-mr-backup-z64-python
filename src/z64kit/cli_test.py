@@ -2700,3 +2700,28 @@ class TestTheDoctorsAccountOfTheSuppliedFolder:
         )
 
         assert "rename to real.aps" in out
+
+
+class TestWhatTheDoctorSaysAboutTheTexEngine:
+    """Which half of this runs depends on whether the machine happens to have a
+    TeX engine, so both halves are driven with the lookup faked."""
+
+    def run(self, monkeypatch, capsys, engine, tmp_path):
+        monkeypatch.setattr(cli.render, "find_engine", lambda *a, **k: engine)
+        args = argparse.Namespace(folder=str(tmp_path), source=None)
+        cli.cmd_doctor(args)
+        return capsys.readouterr().out
+
+    def test_an_engine_that_is_there_is_named_with_no_advice_attached(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        out = self.run(monkeypatch, capsys, "tectonic", tmp_path)
+
+        assert "TeX engine          tectonic" in out
+        assert "install tectonic" not in out
+
+    def test_no_engine_says_which_one_to_install(self, monkeypatch, capsys, tmp_path):
+        out = self.run(monkeypatch, capsys, None, tmp_path)
+
+        assert "none found" in out
+        assert "install tectonic" in out

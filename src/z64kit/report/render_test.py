@@ -281,3 +281,21 @@ class TestCountingPagesFromACompressedTree:
         made.write_bytes(b"%PDF-1.5\nstream\n" + body + b"\nendstream\n%%EOF")
 
         assert render.count_pages(made) == 4
+
+    def test_page_markers_inside_a_stream_are_counted_once_inflated(self, tmp_path):
+        """Tectonic packs the page tree into an object stream, so the marker scan
+        over the raw bytes finds nothing and the count has to inflate first. On a
+        runner with no TeX installed nothing else reaches this."""
+        import zlib
+
+        body = zlib.compress(b"/Type /Page\n/Type /Page\n/Type /Page\n")
+        made = tmp_path / "objstm.pdf"
+        made.write_bytes(b"%PDF-1.5\nstream\n" + body + b"\nendstream\n%%EOF")
+
+        assert render.count_pages(made) == 3
+
+    def test_a_stream_that_does_not_inflate_is_passed_over(self, tmp_path):
+        made = tmp_path / "broken.pdf"
+        made.write_bytes(b"%PDF-1.5\nstream\nnot really deflate data\nendstream\n%%EOF")
+
+        assert render.count_pages(made) == 0
