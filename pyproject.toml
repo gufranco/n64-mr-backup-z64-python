@@ -77,10 +77,23 @@ source = ["src/z64kit"]
 omit = ["*_test.py", "*/conftest.py"]
 
 [tool.coverage.report]
-fail_under = 95
+fail_under = 100
 show_missing = true
 skip_covered = true
-exclude_lines = ["if __name__ == .__main__.:", "raise NotImplementedError"]
+# `exclude_also` rather than `exclude_lines`: the latter replaces coverage's
+# defaults, which is what silently turned every `# pragma: no cover` in the tree
+# into an ordinary line.
+exclude_also = [
+  # The guard hands argv to a function that is itself tested, so there is
+  # nothing behind it left to exercise. Importing the module to reach the guard
+  # would run the tool rather than test it.
+  'if __name__ == "__main__":',
+  # A type checking block never runs, by definition. Python 3.14 drops it before
+  # coverage can see it and earlier versions do not, so leaving it in would make
+  # the gate mean one thing on the newest runtime and another on the oldest.
+  'if TYPE_CHECKING:',
+  "raise NotImplementedError",
+]
 
 [tool.ruff]
 line-length = 100

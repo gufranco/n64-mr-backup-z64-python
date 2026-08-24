@@ -333,3 +333,110 @@ class TestTheRealManifestIsBroad:
         claimed = {c for e in manifest.entries() for c in e.companions}
 
         assert headers <= claimed, f"orphan headers: {sorted(headers - claimed)}"
+
+
+def _entry(**over):
+    base = {
+        "name": "Test patch",
+        "kind": "patch",
+        "filename": "test.aps",
+        "size": 16,
+        "sha256": "0" * 64,
+        "crc32": "00000000",
+        "provenance": "made up for a test",
+    }
+    return artifacts.ArtifactEntry(**{**base, **over})
+
+
+class TestTheManifestRoundTrips:
+    """Every optional field, because the writer drops the ones that are empty.
+
+    A manifest is written from these dictionaries and read back into these
+    objects. A field the writer forgets is a field the reader never sees again,
+    and the only place that shows up is a patch that stops being recognised.
+    """
+
+    def test_a_bare_entry_carries_only_the_required_keys(self):
+        out = artifacts.entry_to_dict(_entry())
+
+        assert set(out) == {
+            "name",
+            "kind",
+            "filename",
+            "size",
+            "sha256",
+            "crc32",
+            "provenance",
+        }
+
+    def test_every_optional_field_survives_the_trip(self):
+        rich = _entry(
+            target_crc1="11111111",
+            target_crc2="22222222",
+            game="A Game",
+            description="Boot and save fix",
+            companions=("test.ram",),
+            region="USA",
+            game_code="NTS",
+            checksum_after="33333333",
+            in_patch_database=True,
+        )
+
+        out = artifacts.entry_to_dict(rich)
+        back = artifacts._entry_from_dict(out)
+
+        assert out["target_crc1"] == "11111111"
+        assert out["target_crc2"] == "22222222"
+        assert out["checksum_after"] == "33333333"
+        assert out["in_patch_database"] is True
+        assert back == rich
+
+
+class TestWhoOwnsACompanion:
+    def test_a_file_no_patch_claims_has_no_owner(self):
+        manifest = artifacts.Manifest(by_sha256={"a": _entry()})
+
+        assert artifacts.owning_patch(manifest, "orphan.ram") is None
+
+    def test_a_file_a_patch_lists_resolves_to_that_patch(self):
+        owner = _entry(companions=("test.ram",))
+        manifest = artifacts.Manifest(by_sha256={"a": owner})
+
+        assert artifacts.owning_patch(manifest, "test.ram") is owner
+
+    def test_a_file_the_manifest_never_names_is_not_in_the_database(self):
+        manifest = artifacts.Manifest(by_sha256={"a": _entry()})
+
+        assert artifacts._in_database(manifest, "nothing.aps") is False
+
+
+class TestTheGeneratedFolderReadme:
+    """The row for a save file, which has no game of its own to name.
+
+    A companion is meaningless apart from the patch it ships with, so the row
+    borrows the game and says which patch it belongs to. Without that the column
+    is blank and the reader cannot tell what the file is for.
+    """
+
+    def test_a_companion_borrows_the_game_from_its_patch(self):
+        owner = _entry(filename="game.aps", game="A Game", companions=("game.ram",))
+        save = _entry(filename="game.ram", kind="save", game=None, description=None)
+        manifest = artifacts.Manifest(by_sha256={"a": owner, "b": save})
+
+        row = artifacts._folder_row(save, manifest)
+
+        assert "A Game" in row
+        assert "`game.aps`" in row
+
+    def test_an_entry_bound_to_no_checksum_says_so(self):
+        row = artifacts._folder_row(_entry(), artifacts.Manifest())
+
+        assert "not bound to a checksum" in row
+
+    def test_an_entry_bound_to_a_checksum_prints_the_pair(self):
+        row = artifacts._folder_row(
+            _entry(target_crc1="11111111", target_crc2="22222222"), artifacts.Manifest()
+        )
+
+        assert "`11111111`" in row
+        assert "`22222222`" in row

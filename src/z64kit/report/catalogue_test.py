@@ -3,7 +3,7 @@ import dataclasses
 import pytest
 
 from z64kit import compat, inventory
-from z64kit.report import catalogue
+from z64kit.report import catalogue, tiers
 
 
 @pytest.fixture(scope="module")
@@ -447,3 +447,55 @@ class TestTitlesAreTrimmedForPrint:
 
         assert "Super Mario 64" in out
         assert "(USA)" not in out
+
+
+class TestTierBands:
+    """The reader's own ranking, which splits the disk list into sections.
+
+    The bands come from a file the reader writes. When there are none the
+    catalogue is a flat list of disks, and when there are some each one opens a
+    section, so the heading has to appear once per band rather than once per
+    disk inside it.
+    """
+
+    def bands(self):
+        return (
+            tiers.Band(name="S", label="Best", through_disk=1),
+            tiers.Band(name="A", label="", through_disk=9),
+        )
+
+    def rows(self):
+        return [row(disk="Zip Disk 01"), row(disk="Zip Disk 02")]
+
+    def test_each_band_opens_a_section(self):
+        out = catalogue.build(
+            self.rows(),
+            rules=compat.load_rules(),
+            held=inventory.Inventory(),
+            generated="today",
+            bands=self.bands(),
+        )
+
+        assert "S-tier: Best" in out
+        assert "A-tier" in out
+
+    def test_the_note_explaining_the_bands_is_printed(self):
+        out = catalogue.build(
+            self.rows(),
+            rules=compat.load_rules(),
+            held=inventory.Inventory(),
+            generated="today",
+            bands=self.bands(),
+        )
+
+        assert "the ranking is the" in out.lower()
+
+    def test_without_bands_no_section_appears(self):
+        out = catalogue.build(
+            self.rows(),
+            rules=compat.load_rules(),
+            held=inventory.Inventory(),
+            generated="today",
+        )
+
+        assert "-tier" not in out

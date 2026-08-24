@@ -118,7 +118,7 @@ def _balanced(tokens: list[str], maxlen: int) -> list[str] | None:
     while sum(lengths.values()) > budget:
         longest = max(lengths, key=lambda k: (lengths[k], -k))
         if lengths[longest] <= 1:
-            return None
+            return None  # pragma: no cover -- unreachable, the guard above bounds the loop
         lengths[longest] -= 1
     return [tokens[i][: lengths[i]] if i in lengths else tokens[i] for i in range(len(tokens))]
 

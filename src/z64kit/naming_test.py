@@ -143,3 +143,66 @@ class TestAssignNames:
         reverse, _, _ = naming.assign(list(reversed(items)))
 
         assert forward == reverse
+
+
+class TestWhenNothingFits:
+    """The shrinker refuses rather than returning a name that is not a name.
+
+    Every candidate is scored and the best wins, so a refusal here is ordinary
+    control flow rather than an error. What matters is that it refuses at all:
+    a shrinker that keeps going produces one-letter tokens no reader can map
+    back to a game.
+    """
+
+    def test_a_budget_smaller_than_the_token_count_is_impossible(self):
+        assert naming._balanced(["alpha", "beta", "gamma"], 2) is None
+
+    def test_digits_are_never_shrunk_so_they_can_exhaust_the_budget(self):
+        assert naming._balanced(["1997", "alpha", "beta"], 4) is None
+
+    def test_a_budget_that_fits_comes_back_shrunk_evenly(self):
+        assert naming._balanced(["alpha", "beta"], 6) == ["alp", "bet"]
+
+    def test_it_shrinks_the_longest_first(self):
+        assert naming._balanced(["a", "verylongtoken"], 4) == ["a", "ver"]
+
+
+class TestASubtitleShortEnoughToKeepWhole:
+    """A subtitle usually becomes its initials. Sometimes it fits as it is.
+
+    Keeping it whole is the better name when there is room, and the branch that
+    offers it only fires when the main title is short enough to leave any.
+    """
+
+    def test_it_is_offered_before_the_initials(self):
+        assert naming.candidates("GT - Cup")[0] == "GTCUP"
+
+    def test_a_long_main_title_leaves_no_room_for_it(self):
+        assert naming.candidates("Mario Golf - Toadstool Tour")[0] == "MARGOLTT"
+
+
+class TestATitleOfNothingButDigits:
+    def test_it_still_produces_a_name(self):
+        assert naming.candidates("1080 64")
+
+
+class TestMoreCollisionsThanTheCounterCanCarry:
+    """A thousand identical titles in one region, which no real library holds.
+
+    The counter runs to 999 and then refuses. It is the difference between a
+    clear error and a silent collision that would overwrite a game on the disk,
+    so it is worth knowing the refusal is there rather than assuming it.
+    """
+
+    def test_it_refuses_rather_than_colliding(self):
+        items = [(f"k{i}", "Same Game (USA)") for i in range(1002)]
+
+        with pytest.raises(ValueError, match="cannot make"):
+            naming.assign(items)
+
+    def test_a_handful_of_collisions_is_resolved_with_a_counter(self):
+        items = [(f"k{i}", "Same Game (USA)") for i in range(3)]
+
+        names, _, _ = naming.assign(items)
+
+        assert len(set(names.values())) == 3

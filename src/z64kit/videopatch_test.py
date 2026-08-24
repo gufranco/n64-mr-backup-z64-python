@@ -124,3 +124,22 @@ class TestTheInvariant:
 
         for existing in (None, save_patch_for(rom), b"PATCH nope"):
             assert videopatch.build_for(rom, existing, **VIDEO).reason
+
+
+class TestAGameAlreadyAtTheWantedSettings:
+    """The merge succeeds and changes nothing, which is not the same as failing.
+
+    A game whose video settings already match keeps the patch it has. Emitting
+    the folded patch anyway would rewrite a working file for no gain, and
+    reporting a failure would read as a game that needs attention.
+    """
+
+    def test_the_existing_patch_is_kept_as_it_is(self):
+        rom = rom_with_table()
+        existing = save_patch_for(rom)
+
+        outcome = videopatch.build_for(rom, existing, antialiasing=True)
+
+        assert outcome.kind == videopatch.SKIPPED
+        assert outcome.patch is None
+        assert "already match" in outcome.reason

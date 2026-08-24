@@ -178,3 +178,27 @@ class TestEngineSelection:
         argv = render._command("pdflatex", tmp_path / "a.tex", tmp_path)
 
         assert "-halt-on-error" in argv
+
+
+class TestCountingPagesInAPdf:
+    """Two shapes of PDF, because tectonic and pdflatex do not write the same file.
+
+    An uncompressed page tree lists `/Type /Page` in the clear. A compressed one
+    hides it inside a stream, so the count has to inflate first. Reporting a page
+    count of zero for a document that rendered is the failure this avoids.
+    """
+
+    def test_a_page_tree_in_the_clear_is_counted_directly(self, tmp_path):
+        made = tmp_path / "plain.pdf"
+        made.write_bytes(b"%PDF-1.5\n/Type /Page\n/Type /Page\n%%EOF")
+
+        assert render.count_pages(made) == 2
+
+    def test_a_file_that_is_not_a_pdf_counts_nothing(self, tmp_path):
+        made = tmp_path / "not.pdf"
+        made.write_bytes(b"this is not a pdf")
+
+        assert render.count_pages(made) == 0
+
+    def test_a_path_that_is_not_there_counts_nothing(self, tmp_path):
+        assert render.count_pages(tmp_path / "absent.pdf") == 0
