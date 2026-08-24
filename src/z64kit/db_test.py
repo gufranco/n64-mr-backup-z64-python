@@ -218,3 +218,22 @@ class TestTheRealCatalogueCoversTheCollection:
 
     def test_it_knows_an_eeprom_game(self):
         assert db.load_default().lookup_by_code("NSME").save == "eeprom512"
+
+
+class TestLinesTheCatalogueFormatDoesNotDefine:
+    """The upstream file is edited by hand, so a line matching neither rule is normal."""
+
+    def test_a_line_that_is_neither_an_id_nor_a_digest_is_passed_over(self):
+        parsed = db.parse(
+            "\n".join(
+                [
+                    "; a comment",
+                    "",
+                    "Save Type Database v1",
+                    "ID:NB7___ eeprom2k # Banjo-Tooie",
+                ]
+            )
+        )
+
+        assert list(parsed.id_patterns) == ["NB7___"]
+        assert parsed.by_md5 == {}

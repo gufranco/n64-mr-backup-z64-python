@@ -1,3 +1,6 @@
+import subprocess
+from pathlib import Path
+
 import pytest
 
 from z64kit.report import latex, render
@@ -202,3 +205,79 @@ class TestCountingPagesInAPdf:
 
     def test_a_path_that_is_not_there_counts_nothing(self, tmp_path):
         assert render.count_pages(tmp_path / "absent.pdf") == 0
+
+
+class TestCompilingWithoutARealEngine:
+    """The compile path, driven by a fake engine so it runs anywhere.
+
+    A runner with no TeX installed skipped all of this, which meant the code
+    that decides whether a PDF was produced, and what to say when it was not,
+    was exercised only on a machine that happened to have tectonic. The gate is
+    only worth its number if it means the same thing everywhere.
+    """
+
+    def arrange(self, monkeypatch, *, returncode=0, stderr=b"", makes_pdf=True):
+        monkeypatch.setattr(render.shutil, "which", lambda name: f"/usr/bin/{name}")
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append(command)
+            if makes_pdf:
+                target = Path(command[-1]).with_suffix(".pdf")
+                target.write_bytes(b"%PDF-1.5\n/Type /Page\n%%EOF")
+            return subprocess.CompletedProcess(command, returncode, b"", stderr)
+
+        monkeypatch.setattr(render.subprocess, "run", run)
+        return calls
+
+    def test_an_engine_on_the_path_is_found(self, monkeypatch):
+        monkeypatch.setattr(render.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+        assert render.find_engine() == render.ENGINES[0]
+
+    def test_a_named_engine_wins_over_the_default_order(self, monkeypatch):
+        monkeypatch.setattr(render.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+        assert render.find_engine(prefer="lualatex") == "lualatex"
+
+    def test_a_successful_compile_reports_the_page_count(self, tmp_path, monkeypatch):
+        self.arrange(monkeypatch)
+
+        result = render.write(
+            "\\documentclass{article}\\begin{document}x\\end{document}",
+            tmp_path / "doc",
+            compile_pdf=True,
+        )
+
+        assert result.pdf_path is not None
+        assert result.pages == 1
+        assert "1 pages" in result.message or "pages" in result.message
+
+    def test_an_engine_that_fails_names_the_first_error_line(self, tmp_path, monkeypatch):
+        self.arrange(
+            monkeypatch, returncode=1, stderr=b"! Undefined control sequence.\n", makes_pdf=False
+        )
+
+        result = render.write("bad", tmp_path / "doc", compile_pdf=True)
+
+        assert result.pdf_path is None
+        assert "Undefined control sequence" in result.message
+
+    def test_an_engine_that_says_nothing_still_reports_a_failure(self, tmp_path, monkeypatch):
+        self.arrange(monkeypatch, returncode=1, makes_pdf=False)
+
+        result = render.write("bad", tmp_path / "doc", compile_pdf=True)
+
+        assert result.pdf_path is None
+        assert "no output" in result.message
+
+
+class TestCountingPagesFromACompressedTree:
+    def test_a_page_count_object_is_read_when_no_markers_are_in_the_clear(self, tmp_path):
+        import zlib
+
+        body = zlib.compress(b"/Count 4\n")
+        made = tmp_path / "compressed.pdf"
+        made.write_bytes(b"%PDF-1.5\nstream\n" + body + b"\nendstream\n%%EOF")
+
+        assert render.count_pages(made) == 4

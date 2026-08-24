@@ -1,3 +1,4 @@
+import argparse
 import json
 from pathlib import Path
 
@@ -2451,3 +2452,251 @@ class TestReportingWhenTheShapeIsUnusual:
 
         assert purchasable == {}
         assert note == ""
+
+
+class TestTheArtifactsReportInEveryShape:
+    """Every way the supplied folder can be wrong, driven by a crafted report.
+
+    On a machine with the files present only the complete path runs; on a fresh
+    runner only the missing path does. Neither machine exercises the other, so
+    the report is built here rather than read off disk and both run everywhere.
+    """
+
+    def report(self, **over):
+        from z64kit import artifacts
+
+        return artifacts.FolderReport(**over)
+
+    def call(self, monkeypatch, capsys, report, tmp_path, **kw):
+        from z64kit import artifacts
+
+        kw.setdefault("source", None)
+        monkeypatch.setattr(artifacts, "inspect_folder", lambda *a, **k: report)
+        args = argparse.Namespace(folder=str(tmp_path), json=False, **kw)
+        code = cli.cmd_artifacts(args)
+        return code, capsys.readouterr().out
+
+    def test_a_complete_folder_says_so(self, monkeypatch, capsys, tmp_path):
+        code, out = self.call(
+            monkeypatch,
+            capsys,
+            self.report(present=("a.aps",), needed=("a.aps",)),
+            tmp_path,
+            write_readme=False,
+        )
+
+        assert code == 0
+        assert "everything the manifest names is present and verified" in out
+
+    def test_a_wrong_file_is_named_with_its_reason(self, monkeypatch, capsys, tmp_path):
+        code, out = self.call(
+            monkeypatch,
+            capsys,
+            self.report(wrong={"a.aps": "digest does not match"}),
+            tmp_path,
+            write_readme=False,
+        )
+
+        assert code == 1
+        assert "wrong (1)" in out
+        assert "digest does not match" in out
+
+    def test_a_misnamed_file_is_told_what_to_rename_it_to(self, monkeypatch, capsys, tmp_path):
+        _code, out = self.call(
+            monkeypatch,
+            capsys,
+            self.report(misnamed={"copy.aps": "real.aps"}),
+            tmp_path,
+            write_readme=False,
+        )
+
+        assert "rename to real.aps" in out
+
+    def test_a_file_the_manifest_does_not_name_is_listed(self, monkeypatch, capsys, tmp_path):
+        _code, out = self.call(
+            monkeypatch,
+            capsys,
+            self.report(unknown=("stranger.bin",)),
+            tmp_path,
+            write_readme=False,
+        )
+
+        assert "not in the manifest (1)" in out
+        assert "stranger.bin" in out
+
+    def test_extra_verified_files_are_counted_apart_from_the_needed_ones(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        _code, out = self.call(
+            monkeypatch,
+            capsys,
+            self.report(present=("a.aps", "b.aps"), needed=("a.aps",)),
+            tmp_path,
+            write_readme=False,
+        )
+
+        assert "more verified, for games not in this collection" in out
+
+    def test_naming_a_collection_narrows_the_report_to_what_it_needs(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        from z64kit import scan
+
+        game = scan.Game(
+            path="x.z64",
+            filename="x.z64",
+            disk=None,
+            size=8 * 1024 * 1024,
+            extension="z64",
+            true_extension="z64",
+            byte_order="z64",
+            internal_name="X",
+            cart_id="XX",
+            region="USA",
+            region_code="E",
+            version=0,
+            crc1="11111111",
+            crc2="22222222",
+            game_code="NXX",
+            cic="6102",
+            checksum_valid=True,
+            sha256="0" * 64,
+            identity_key=b"k",
+        )
+        monkeypatch.setattr(
+            cli.scan, "scan", lambda *a, **k: scan.Collection(root=str(tmp_path), games=(game,))
+        )
+
+        code, out = self.call(
+            monkeypatch,
+            capsys,
+            self.report(),
+            tmp_path,
+            write_readme=False,
+            source=str(tmp_path),
+        )
+
+        assert code == 0
+        assert "expected 0 files" in out
+
+
+class TestTheCartridgesWorthBuyingForEachDonor:
+    """The catalogue is fetched rather than bundled, so a fresh machine has none.
+
+    Every branch here is therefore unreachable on a runner unless the catalogue
+    is built in the test, which is what these do.
+    """
+
+    def shopping(self, key="eeprom16k"):
+        from z64kit import inventory
+
+        return inventory.ShoppingList(
+            items=(
+                inventory.ShoppingItem(
+                    key=key, label="EEPROM 16K", reference="", outstanding=True, unlocks=3
+                ),
+            )
+        )
+
+    def catalogue(self):
+        from z64kit import db
+
+        return db.parse(
+            "\n".join(
+                [
+                    "ID:NB7___ eeprom2k # Banjo-Tooie",
+                    "ID:NSM___ eeprom512 # Super Mario 64",
+                ]
+            )
+        )
+
+    def test_a_donor_with_a_save_tag_gets_the_cartridges_that_carry_it(self, monkeypatch):
+        from z64kit import compat, scan
+
+        monkeypatch.setattr(cli.db, "available", lambda: True)
+        monkeypatch.setattr(cli.db, "load_default", self.catalogue)
+
+        rows, note = cli._purchasable_donors(
+            compat.load_rules(), self.shopping(), scan.Collection(root="/nowhere")
+        )
+
+        assert note == ""
+        assert [donor.title for donor in rows["eeprom16k"]] == ["Banjo-Tooie"]
+
+    def test_a_donor_no_catalogued_cartridge_satisfies_is_left_out(self, monkeypatch):
+        from z64kit import compat, scan
+
+        monkeypatch.setattr(cli.db, "available", lambda: True)
+        monkeypatch.setattr(cli.db, "load_default", self.catalogue)
+
+        rows, _ = cli._purchasable_donors(
+            compat.load_rules(), self.shopping("flashram"), scan.Collection(root="/nowhere")
+        )
+
+        assert rows == {}
+
+    def test_without_the_catalogue_the_document_says_which_command_fetches_it(self, monkeypatch):
+        from z64kit import compat, scan
+
+        monkeypatch.setattr(cli.db, "available", lambda: False)
+
+        rows, note = cli._purchasable_donors(
+            compat.load_rules(), self.shopping(), scan.Collection(root="/nowhere")
+        )
+
+        assert rows == {}
+        assert "z64kit db-update" in note
+
+
+class TestTheDoctorsAccountOfTheSuppliedFolder:
+    """The same crafted-report treatment as the artifacts command.
+
+    Doctor and artifacts share one printer, and each machine exercises only the
+    half its own disk happens to produce.
+    """
+
+    def call(self, monkeypatch, capsys, report, tmp_path):
+        from z64kit import artifacts
+
+        manifest = artifacts.load_default_manifest()
+        monkeypatch.setattr(artifacts, "inspect_folder", lambda *a, **k: report)
+        cli._report_artifact_folder(tmp_path, manifest)
+        return capsys.readouterr().out
+
+    def test_a_complete_folder_says_so(self, monkeypatch, capsys, tmp_path):
+        from z64kit import artifacts
+
+        out = self.call(
+            monkeypatch,
+            capsys,
+            artifacts.FolderReport(present=("a.aps",), needed=("a.aps",)),
+            tmp_path,
+        )
+
+        assert "everything the manifest names is present and verified" in out
+
+    def test_extra_verified_files_are_counted_apart_from_the_needed_ones(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        from z64kit import artifacts
+
+        out = self.call(
+            monkeypatch,
+            capsys,
+            artifacts.FolderReport(present=("a.aps", "b.aps"), needed=("a.aps",)),
+            tmp_path,
+        )
+
+        assert "more verified, for games not in this collection" in out
+
+    def test_a_misnamed_file_is_told_what_to_rename_it_to(self, monkeypatch, capsys, tmp_path):
+        from z64kit import artifacts
+
+        out = self.call(
+            monkeypatch,
+            capsys,
+            artifacts.FolderReport(misnamed={"copy.aps": "real.aps"}),
+            tmp_path,
+        )
+
+        assert "rename to real.aps" in out
