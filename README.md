@@ -208,8 +208,15 @@ all ship one marked externally managed, where `pip install` stops with
 `error: externally-managed-environment` and installs nothing. `z64kit` stays on the path for as
 long as that environment is active, so a new shell needs `source .venv/bin/activate` again.
 
-Without installing anything, `python3 -m z64kit` runs the same command line from the checkout and
-takes the same arguments. `pytest` needs no environment either: the paths are in `pyproject.toml`.
+Without installing anything, the module form runs the same command line from the checkout, but it
+has to be told where both packages are:
+
+```bash
+PYTHONPATH="src:n64-video-interface-python/src" python3 -m z64kit
+```
+
+`pytest` needs no such thing. Those two paths are already in `pyproject.toml`, so a bare `pytest`
+works in a fresh clone.
 
 > [!NOTE]
 > Every release lives on this repository's [releases page](https://github.com/gufranco/n64-mr-backup-z64-python/releases)
