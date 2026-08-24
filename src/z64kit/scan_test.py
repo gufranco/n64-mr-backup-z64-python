@@ -223,3 +223,77 @@ class TestADirectoryInsideADiskFolder:
 
         assert len(found.games) == 1
         assert not any("extras" in one.path for one in found.skipped)
+
+
+class TestWhichBootChipAGameIsRecordedWith:
+    """Reading the chip off the header checksum answers only for a dump whose
+    header still agrees with its data, and it cannot separate 6101 from 6102 at
+    all. Both gaps show up on a real shelf: Pokemon Stadium carries a header its
+    own data no longer matches, and Star Fox 64 is the 6101 cartridge.
+    """
+
+    def rom_with_boot_code(self, tmp_path, code, name="game.z64"):
+        from n64_video_interface import checksum
+
+        blob = bytearray(make_rom(size=checksum.START + checksum.LENGTH))
+        blob[checksum.IPL3_START : checksum.IPL3_END] = code
+        (tmp_path / name).write_bytes(bytes(blob))
+        return tmp_path
+
+    def test_the_boot_code_names_the_chip_even_when_the_checksum_does_not(
+        self, tmp_path, monkeypatch
+    ):
+        from n64_video_interface import checksum
+
+        code = (bytes(range(256)) * 16)[: checksum.IPL3_END - checksum.IPL3_START]
+        import zlib
+
+        monkeypatch.setitem(checksum.IPL3_CRC32, zlib.crc32(code) & 0xFFFFFFFF, "6103")
+        folder = self.rom_with_boot_code(tmp_path, code)
+
+        game = scan.scan(str(folder)).games[0]
+
+        assert game.checksum_valid is False
+        assert game.cic == "6103"
+
+    def test_boot_code_no_table_names_falls_back_to_the_checksum(self, tmp_path):
+        from n64_video_interface import checksum
+
+        code = (bytes(range(255, -1, -1)) * 16)[: checksum.IPL3_END - checksum.IPL3_START]
+        folder = self.rom_with_boot_code(tmp_path, code)
+
+        game = scan.scan(str(folder)).games[0]
+
+        assert checksum.boot_chip((folder / "game.z64").read_bytes()) is None
+        assert game.cic == "unknown"
+
+
+class TestWhatTheWarningSaysAboutADumpThatDoesNotVerify:
+    def rom_that_fails_its_own_checksum(self, tmp_path):
+        from n64_video_interface import checksum
+
+        blob = bytearray(make_rom(size=checksum.START + checksum.LENGTH))
+        blob[0x10] ^= 0xFF
+        (tmp_path / "game.z64").write_bytes(bytes(blob))
+        return tmp_path
+
+    def test_it_names_the_chip_when_the_boot_code_gave_one(self, tmp_path, monkeypatch):
+        import zlib
+
+        from n64_video_interface import checksum
+
+        folder = self.rom_that_fails_its_own_checksum(tmp_path)
+        code = (folder / "game.z64").read_bytes()[checksum.IPL3_START : checksum.IPL3_END]
+        monkeypatch.setitem(checksum.IPL3_CRC32, zlib.crc32(code) & 0xFFFFFFFF, "6103")
+
+        warning = " ".join(scan.scan(str(folder)).warnings)
+
+        assert "6103" in warning
+        assert "matching no known boot chip" not in warning
+
+    def test_it_still_says_so_when_nothing_identified_the_chip(self, tmp_path):
+        folder = self.rom_that_fails_its_own_checksum(tmp_path)
+
+        warning = " ".join(scan.scan(str(folder)).warnings)
+
+        assert "no known boot chip" in warning

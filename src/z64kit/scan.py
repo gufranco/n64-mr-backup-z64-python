@@ -98,7 +98,12 @@ def _read_game(path: Path, disk: str | None, verify_checksum: bool) -> Game | tu
     info = header.parse(data)
     if info is None:
         return None, "no recognisable N64 header"
-    valid, cic = checksum.verify(data) if verify_checksum else (False, None)
+    valid, matched = checksum.verify(data) if verify_checksum else (False, None)
+    # The boot code decides, and the checksum is the fallback. The checksum names a
+    # chip only while the header still agrees with the data, so a dump with an
+    # edited header loses its chip entirely, and it cannot separate 6101 from 6102
+    # because those two seed it identically. Both cases are on a real shelf.
+    cic = checksum.boot_chip(data) or matched
     return Game(
         path=str(path),
         filename=path.name,
@@ -179,10 +184,19 @@ def scan(
                     "convert it to big endian"
                 )
             if not result.checksum_valid and verify_checksum:
-                warnings.append(
-                    f"{result.filename} carries a checksum matching no known boot chip, "
-                    "so the dump may be damaged"
-                )
+                # Naming the chip changes what the reader should do. With a chip,
+                # the boot code is intact and only the stored checksum disagrees
+                # with the data, which points at the dump rather than at the game.
+                if result.cic != "unknown":
+                    warnings.append(
+                        f"{result.filename} carries boot chip {result.cic}, but its stored "
+                        "checksum does not match its own data, so the dump may be damaged"
+                    )
+                else:
+                    warnings.append(
+                        f"{result.filename} carries a checksum matching no known boot chip, "
+                        "so the dump may be damaged"
+                    )
         elif extension in rules.patch_extensions or extension in rules.aux_extensions:
             data = path.read_bytes()
             companions.append(
