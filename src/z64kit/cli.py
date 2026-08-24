@@ -25,6 +25,7 @@ import json
 import secrets
 import struct
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import (
@@ -37,9 +38,11 @@ from . import (
     merge,
     naming,
     packing,
+    patchdb,
     prompts,
     scan,
     vi,
+    videopatch,
     wizard,
 )
 from .fat import image, payload, writer
@@ -590,6 +593,8 @@ def _vi_requests(args: argparse.Namespace) -> dict[str, bool]:
 def cmd_vi(args: argparse.Namespace) -> int:
     """Report the video configuration, and optionally edit it under guard."""
     requests = _vi_requests(args)
+    if requests and getattr(args, "as_patches", False):
+        return _cmd_vi_as_patches(args, requests)
     if requests:
         return _cmd_vi_patch(args, requests)
     found = _scan_or_exit(args.source)
@@ -652,6 +657,175 @@ def cmd_vi(args: argparse.Namespace) -> int:
     print("osViSetSpecialFeatures. Clearing it therefore means patching that routine,")
     print("not the table. Anti-aliasing and the divot filter do live in the table.")
     return 0
+
+
+@dataclass(frozen=True)
+class _ExistingPatch:
+    """A patch a game already needs, and the route by which it is delivered."""
+
+    where: str
+    name: str
+    blob: bytes
+
+
+def _existing_patch_index(folder: str | None) -> dict[bytes, _ExistingPatch]:
+    """Every patch a collection might already need, keyed the way a ROM is looked up.
+
+    Loose files and members of the unit's database are indexed together because a
+    game does not care which route its patch arrived by. The delivery route only
+    matters when a replacement is written, which is why each entry remembers it.
+
+    A database entry wins over a loose file with the same binding. Both routes
+    matching one game is the ambiguity the project has never settled on hardware,
+    and rewriting the database entry is the side of it that leaves one candidate.
+    """
+    if not folder:
+        return {}
+    root = Path(folder)
+    if not root.is_dir():
+        raise PatchFolderMissingError(
+            f"the patch folder {folder} does not exist. A missing folder is not the "
+            "same as an empty one: continuing would emit video patches for games that "
+            "already need one, so this stops instead."
+        )
+
+    rules = compat.load_rules()
+    headers: dict[str, bytes] = {}
+    payloads: dict[str, tuple[str, bytes]] = {}
+    for path in sorted(root.iterdir()):
+        if not path.is_file():
+            continue
+        extension = path.suffix.lstrip(".").upper()
+        if extension == "HDR":
+            headers[path.stem.lower()] = path.read_bytes()
+        elif extension in rules.patch_extensions:
+            payloads[path.stem.lower()] = (extension, path.read_bytes())
+
+    index: dict[bytes, _ExistingPatch] = {}
+    for stem, (extension, blob) in payloads.items():
+        key = _binding_key(headers.get(stem), blob)
+        if key is not None:
+            index[key] = _ExistingPatch("file", f"{stem}.{extension.lower()}", blob)
+
+    database = root / artifacts.PATCH_DATABASE
+    if database.is_file():
+        members = patchdb.read(database.read_bytes())
+        for patch_name, sidecar in patchdb.patch_members(members).items():
+            key = header.identity_key(members[sidecar])
+            if key is not None:
+                index[key] = _ExistingPatch("database", patch_name, members[patch_name])
+    return index
+
+
+def _existing_for(index: dict[bytes, _ExistingPatch], game: scan.Game) -> _ExistingPatch | None:
+    """The same two keys `build` looks a patch up by, so the two cannot disagree."""
+    found = index.get(game.identity_key)
+    if found is not None:
+        return found
+    try:
+        return index.get(_crc_key(int(game.crc1, 16), int(game.crc2, 16)))
+    except ValueError:
+        return None
+
+
+def _video_patch_name(game: scan.Game) -> str:
+    """A source filename that cannot collide, derived from what the patch binds to.
+
+    The name never reaches a disk. `build` writes every patch under the 8.3 base
+    of the ROM it belongs to, so this only has to be unique inside the folder, and
+    the checksum pair is unique by the same rule that makes it a binding.
+    """
+    return f"v{game.crc1}{game.crc2}.aps".lower()
+
+
+def _cmd_vi_as_patches(args: argparse.Namespace, requests: dict[str, bool]) -> int:
+    """Emit the video change as patches, leaving every ROM on disk untouched."""
+    if args.apply and not args.output:
+        print("--apply needs --output, so nothing is written over", file=sys.stderr)
+        return 2
+
+    found = _scan_or_exit(args.source)
+    existing = _existing_patch_index(args.patches)
+    wanted = ", ".join(sorted(requests))
+    mode = "APPLYING" if args.apply else "DRY RUN, nothing will be written"
+    print(f"{mode}. Requested: {wanted} off. No ROM is modified.\n")
+
+    emitted: list[tuple[str, bytes]] = []
+    replacements: dict[str, bytes] = {}
+    tally = {videopatch.VIDEO_ONLY: 0, videopatch.MERGED: 0, videopatch.SKIPPED: 0}
+
+    for game in found.games:
+        source = _existing_for(existing, game)
+        outcome = videopatch.build_for(
+            Path(game.path).read_bytes(), source.blob if source else None, **requests
+        )
+        tally[outcome.kind] += 1
+        if outcome.patch is None:
+            kept = ", its existing patch is kept" if source else ""
+            print(f"  {game.stem[:48]:48} skipped{kept}")
+            continue
+        if source is None:
+            emitted.append((_video_patch_name(game), outcome.patch))
+            print(f"  {game.stem[:48]:48} video patch, {len(outcome.patch)} bytes")
+        elif source.where == "database":
+            replacements[source.name] = outcome.patch
+            print(f"  {game.stem[:48]:48} merged into {source.name}")
+        else:
+            emitted.append((source.name, outcome.patch))
+            print(f"  {game.stem[:48]:48} merged, replacing {source.name}")
+
+    print(
+        f"\n{tally[videopatch.VIDEO_ONLY]} video patches, "
+        f"{tally[videopatch.MERGED]} merged, {tally[videopatch.SKIPPED]} skipped."
+    )
+    if not args.apply:
+        print("Nothing was written. Add --apply with --output to write the patch folder.")
+        return 0
+
+    out_dir = Path(args.output)
+    written = _write_patch_folder(out_dir, args.patches, emitted, replacements)
+    print(f"{written} files written to {out_dir}. Every ROM was left untouched.")
+    print(f"Build with:  z64kit build {args.source!r} <images> --patches {str(out_dir)!r}")
+    return 0
+
+
+def _write_patch_folder(
+    out_dir: Path,
+    library: str | None,
+    emitted: list[tuple[str, bytes]],
+    replacements: dict[str, bytes],
+) -> int:
+    """Write a complete patch folder: the library as it was, plus what changed.
+
+    `build` refuses a folder that is missing rather than empty, and a folder
+    holding only the new patches would silently drop every existing one. So the
+    library is copied whole and the changes land on top of that copy.
+
+    A dotfile in the library is left behind. It is not a patch, and the folder
+    this writes is an artifact to hand to `build` rather than a second checkout.
+    The count is of files present afterwards, not of writes, because a merged
+    patch replacing a library file is one file and would otherwise read as two.
+
+    A library can hold a loose copy of a patch the database also carries, and
+    `build` ships both. So a replacement is written down both routes rather than
+    only the one it was read from, which leaves the two copies agreeing instead
+    of leaving the one beside the ROM without the video change.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: set[str] = set()
+    if library:
+        for path in sorted(Path(library).iterdir()):
+            if not path.is_file() or path.name.startswith("."):
+                continue
+            if path.name == artifacts.PATCH_DATABASE and replacements:
+                (out_dir / path.name).write_bytes(patchdb.rebuild(path.read_bytes(), replacements))
+            else:
+                (out_dir / path.name).write_bytes(replacements.get(path.name, path.read_bytes()))
+            written.add(path.name)
+    for name, blob in emitted:
+        (out_dir / name).write_bytes(blob)
+        written.add(name)
+    return len(written)
 
 
 def _cmd_vi_patch(args: argparse.Namespace, requests: dict[str, bool]) -> int:
@@ -1127,6 +1301,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     vic.add_argument("--no-gamma", action="store_true", help="disable gamma correction")
     vic.add_argument("--output", default=None, help="folder for patched copies")
+    vic.add_argument(
+        "--as-patches",
+        action="store_true",
+        help="emit patches instead of edited ROMs, leaving every ROM untouched",
+    )
+    vic.add_argument(
+        "--patches",
+        default=None,
+        help="folder of patches a game may already need, folded in rather than displaced",
+    )
     vic.add_argument("--apply", action="store_true", help="actually write, otherwise dry run")
     vic.set_defaults(func=cmd_vi)
 

@@ -269,6 +269,30 @@ z64kit vi ~/roms                                   # audit only, writes nothing
 z64kit merge game.z64 game.aps --no-aa --output merged.aps --apply
 ```
 
+### Across a whole collection, without touching a ROM
+
+`--as-patches` applies the same reasoning to every game at once and writes patches rather than
+edited ROMs, so nothing in the collection is modified:
+
+```bash
+z64kit vi ~/roms --no-aa --no-dither --as-patches \
+    --patches patches --output ~/video-patches --apply
+z64kit build ~/roms ~/images --patches ~/video-patches
+```
+
+Each game takes one of three routes. A game with no patch of its own gets a video-only patch. A
+game that already needs one gets the two folded together. A game whose existing patch cannot be
+folded keeps that patch and goes without the video change, which is the only one of the three that
+costs nothing but sharpness.
+
+The output is a complete patch folder, the library as it was plus what changed, because `build`
+treats a folder holding only the new patches as complete and would silently drop every patch it
+does not find there.
+
+Where the existing patch lives inside the unit's database, the merged patch replaces that entry and
+the 64-byte header beside it is copied unchanged. That keeps one patch per game, so the question of
+which of two matching patches wins never arises.
+
 > [!NOTE]
 > A ROM's filename never affects patch matching. Patches inside the unit's database are located by
 > the ROM's first 64 bytes, so renaming to 8.3 is safe. Patches sitting beside a ROM are the
@@ -360,7 +384,7 @@ cross-checking the stored checksums against the paired header. All agreed.
 None of it has been run on the hardware. One question in particular is open: when both a patch
 beside the ROM and a patch inside the unit's database match the same game, which one wins. Until
 that is settled on a real unit, rebuilding the database with the merged patch is the safer delivery
-route than dropping a file beside the ROM.
+route than dropping a file beside the ROM, and it is the route `--as-patches` takes.
 
 ## License
 
