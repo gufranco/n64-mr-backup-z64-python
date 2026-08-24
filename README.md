@@ -1,5 +1,7 @@
 <div align="center">
 
+<h1>N64 Mr. Backup Z64</h1>
+
 <strong>Turn an N64 ROM collection into verified Mr. Backup Z64 disk images, and never touch the ROMs.</strong>
 
 <br>
@@ -8,6 +10,9 @@
 [![CI](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml)
 [![Analysis](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/analysis.yml/badge.svg)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/analysis.yml)
 [![Scorecard](https://api.scorecard.dev/projects/github.com/gufranco/n64-mr-backup-z64-python/badge)](https://scorecard.dev/viewer/?uri=github.com/gufranco/n64-mr-backup-z64-python)
+[![Coverage](https://img.shields.io/badge/coverage-95%25%20statement%20%2B%20branch-brightgreen)](#running-the-tests)
+[![Tests](https://img.shields.io/badge/tests-1%2C096-brightgreen)](#running-the-tests)
+[![Types](https://img.shields.io/badge/mypy-strict-blue)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE.txt)
 
 </div>
@@ -21,7 +26,7 @@
   <a href="#commands">Commands</a>
 </p>
 
-**13** commands · **zero** runtime dependencies · **963** tests · **byte-reproducible** images · coverage gated at **95%** · types checked **strict**
+**13** commands · **1,096** tests · **95%** statement and branch coverage · **byte-reproducible** images · **zero** third-party runtime dependencies · types checked **strict**
 
 ```console
 $ z64kit doctor
@@ -82,8 +87,9 @@ files are the same bytes, so an image can be verified rather than trusted.
 <td width="50%" valign="top">
 
 ### Video settings without touching the ROM
-Anti-aliasing, divot, gamma dithering, and the dedither filter can be turned off. The change ships
-as a patch bound to the untouched ROM, never as an edit to the file on disk.
+Anti-aliasing, divot, gamma dithering, and the dedither filter can be turned off, through
+[n64-video-interface](https://github.com/gufranco/n64-video-interface-python). The change ships as a
+patch bound to the untouched ROM, never as an edit to the file on disk.
 
 </td>
 </tr>
@@ -337,21 +343,30 @@ write to directly.
 src/z64kit/
   aps.py          # the unit's patch format: parse, apply, build
   merge.py        # fold a video change into an existing patch
-  vi.py           # video mode table audit and guarded editing
+  videopatch.py   # decide, per game, what to ship so no ROM is edited
+  patchdb.py      # the unit's patch database, read and rebuilt in place
   naming.py       # 8.3 names that stay recognisable
   packing.py      # 4 MiB granularity and the disk-count lower bound
   artifacts.py    # identify, verify, diagnose user-supplied files
   compat.py       # save-chip and boot-chip rules
+  donors.py       # which cartridges carry a given save chip
   scan.py         # walk a collection
   inventory.py    # which cartridges are owned
   db.py           # save-type catalogue, fetched not bundled
+  burn.py         # writing a disk, and every reason to refuse to
   cli.py          # the command line
   fat/            # FAT16 volume construction, verification, and disk payloads
   report/         # LaTeX catalogue and rendering
-  rom/            # header parsing and per-CIC checksum
   data/           # manifests. No payloads
+n64-video-interface-python/   # submodule: the VI editor and the N64 checksum
 patches/          # where you put the files you supply. Generated README, no payloads
 ```
+
+The video editing, the N64 header parsing and the per-CIC checksum live in
+[n64-video-interface-python](https://github.com/gufranco/n64-video-interface-python). None of it is
+specific to this unit, so it is a separate package with its own command line, and this repository
+carries it as a submodule. That is why the clone above needs `--recurse-submodules` and why the
+Download ZIP button cannot work.
 
 ## For contributors
 
@@ -359,9 +374,16 @@ patches/          # where you put the files you supply. Generated README, no pay
 
 | Suite | Command | Covers |
 |:------|:--------|:-------|
-| Everything | `pytest` | The whole suite, with the coverage gate at 95% |
-| Lint and format | `ruff check src tests && ruff format --check src tests` | Style and static analysis |
+| Everything | `pytest` | 1,096 tests. No environment to set up: the paths are in [`pyproject.toml`](pyproject.toml) |
+| Coverage | `pytest --cov` | The 95% statement and branch gate, enforced by its own CI job |
+| Lint and format | `ruff check . && ruff format --check .` | Style and static analysis |
 | Types | `mypy` | Strict, with every optional error class the version offers |
+
+Every ROM the suite needs is synthesised, so it passes in a fresh clone with no game files, no
+patches, no cached catalogue and no network. Tests that need real files carry a marker and skip.
+
+A weekly job re-runs everything against unpinned tooling, which is what catches a linter or a type
+checker changing its mind about code nobody touched.
 
 ### Project conventions
 
@@ -369,7 +391,8 @@ patches/          # where you put the files you supply. Generated README, no pay
 |:-----------|:-------|
 | Commit format | [Conventional Commits](https://www.conventionalcommits.org/) |
 | Lint and format | [ruff](https://docs.astral.sh/ruff/), configured in [`pyproject.toml`](pyproject.toml) |
-| Coverage gate | 95%, enforced by [`pyproject.toml`](pyproject.toml) |
+| Coverage gate | 95% statement and branch, declared in [`pyproject.toml`](pyproject.toml) and run by its own CI job |
+| Submodule | `--recurse-submodules` on clone. The archive download cannot work |
 
 ### Non-obvious decisions
 
