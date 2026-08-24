@@ -81,10 +81,10 @@ You should see a list starting with `artifact manifest`. If you instead see
 is not on your PATH:
 
 ```
-python3 -m z64kit.cli doctor
+python3 -m z64kit doctor
 ```
 
-If that works, use `python3 -m z64kit.cli` everywhere this guide says `z64kit`.
+If that works, use `python3 -m z64kit` everywhere this guide says `z64kit`.
 
 ---
 
@@ -259,7 +259,7 @@ designed for a black-and-white laser printer.
 
 **`command not found: z64kit`**
 The install worked but the short name is not on your PATH. Use
-`python3 -m z64kit.cli` instead of `z64kit`.
+`python3 -m z64kit` instead of `z64kit`.
 
 **`command not found: python3`** (Windows)
 Type `python` instead. If that also fails, Python was installed without the "Add

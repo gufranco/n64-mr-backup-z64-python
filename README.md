@@ -194,8 +194,19 @@ Or clone it to work on it:
 ```bash
 git clone https://github.com/gufranco/n64-mr-backup-z64-python.git
 cd n64-mr-backup-z64-python
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
+z64kit
 ```
+
+The virtual environment is not optional on a system Python. Homebrew, Debian, Ubuntu and Fedora
+all ship one marked externally managed, where `pip install` stops with
+`error: externally-managed-environment` and installs nothing. `z64kit` stays on the path for as
+long as that environment is active, so a new shell needs `source .venv/bin/activate` again.
+
+Without installing anything, `PYTHONPATH=src python3 -m z64kit` runs the same command line from
+the checkout and takes the same arguments.
 
 > [!NOTE]
 > Every release lives on this repository's [releases page](https://github.com/gufranco/n64-mr-backup-z64-python/releases)
