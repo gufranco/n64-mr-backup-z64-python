@@ -5,7 +5,16 @@
     "memory_mbit": 256,
     "memory_mib": 32,
     "memory_source": "Official manual, September 1998, feature list: in-built 256Mbit memory",
-    "larger_titles_note": "Support for 512 Mbit titles appears in the BIOS 2.18 release notes as planned and never delivered, so a larger ROM cannot be loaded from disk under any BIOS.",
+    "larger_titles_note": "The BIOS 2.18 release notes list 512 Mbit game play among the functions NOT added, annotated WILL NEVER RELEASE Z64BIOS V3.00 HW4. It was declined rather than planned, and it names a firmware version and a hardware revision that both never shipped, so no BIOS makes a larger ROM loadable.",
+    "larger_titles_source": "Z64_218.TXT, shipped with the last official BIOS, in the same block that records 16 Kbit EEPROM as not done for lack of Z64.EXE source",
+    "larger_titles_hardware": "A 64 MB SIMM does not work in any revision. The unit lacks the DRAM refresh hardware for it, so fitting one yields a memory error and no game loads at all. Making it work would mean recoding and reburning the ASIC that bridges DRAM to the PI bus, and on HW3 that ASIC is inside the CPU.",
+    "hardware_revisions": {
+      "identification": "The version string on the LCD at power on ends with a letter: A is HW1, B is HW2, C is HW3. A unit reading 2.18B is HW2.",
+      "HW1": { "memory_mbit": 128, "memory_mib": 16, "note": "No on-screen display. Cannot be upgraded to 256 Mbit." },
+      "HW2": { "memory_mbit": 256, "memory_mib": 32, "note": "Widely considered the best revision. Needs no freeze modification." },
+      "HW3": { "memory_mbit": 256, "memory_mib": 32, "note": "Cheaper build with fewer parts. Freezes from overheating, and early units shipped a faulty Q3 transistor marked 9013 where 9013 H is correct." },
+      "source": "Unit FAQ, the version and inner-components entries"
+    },
     "rom_extensions": ["ROM", "V64", "USA", "PAL", "JAP", "Z64", "ZIP"],
     "patch_extensions": ["ZP1", "IP1", "ZP2", "IP2", "ZPS", "IPS", "APS", "NCS"],
     "aux_extensions": ["ZCC", "BEM", "MPK", "INI", "EEP", "RAM"],
