@@ -420,7 +420,9 @@ def _roster_entries(found: scan.Collection, patch_folder: str | None) -> list[ro
                     crc2=game.crc2,
                     size=game.size,
                     game_code=game.game_code,
-                    title=game.internal_name,
+                    internal_name=game.internal_name,
+                    region=game.region,
+                    version=game.version,
                     pinned_by=pinned,
                 )
             )

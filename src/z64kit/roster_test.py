@@ -13,7 +13,9 @@ def entry(**over):
         "crc2": "BF0CDFD1",
         "size": 7,
         "game_code": "NBKE",
-        "title": "Banjo-Kazooie",
+        "internal_name": "BANJO KAZOOIE",
+        "region": "USA",
+        "version": 0,
     }
     return roster.Entry(**{**base, **over})
 
@@ -223,3 +225,49 @@ class TestFindingTheRightRomsInAnyPile:
 
         assert outcome.complete is True
         assert outcome.unused == ("/pile/x",)
+
+
+class TestTheIdentityTheCartridgeCarriesInsideItself:
+    """None of this decides anything, the digest already does. It is here so a
+    person reading an entry recognises the game, since the filename is the one
+    part of a dump anybody can change."""
+
+    def test_the_internal_name_survives_a_round_trip(self, tmp_path):
+        built = roster.Roster(generated="d", entries=(entry(),))
+        path = tmp_path / "r.json"
+        path.write_text(roster.dumps(built), encoding="utf-8")
+
+        loaded = roster.load(path).entries[0]
+
+        assert loaded.internal_name == "BANJO KAZOOIE"
+        assert loaded.region == "USA"
+        assert loaded.version == 0
+
+    def test_a_file_written_before_these_fields_existed_still_loads(self, tmp_path):
+        import json
+
+        path = tmp_path / "old.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "generated": "2026-01-01",
+                    "entries": [
+                        {
+                            "disk": "Zip Disk 01",
+                            "source_name": "a.z64",
+                            "image_name": "A.Z64",
+                            "sha256": "00",
+                            "crc1": "1",
+                            "crc2": "2",
+                            "size": 1,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        loaded = roster.load(path).entries[0]
+
+        assert loaded.internal_name == ""
+        assert loaded.version == 0

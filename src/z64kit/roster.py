@@ -47,7 +47,9 @@ class Entry:
     crc2: str
     size: int
     game_code: str = ""
-    title: str = ""
+    internal_name: str = ""
+    region: str = ""
+    version: int = 0
     pinned_by: tuple[str, ...] = ()
 
     @property
@@ -128,7 +130,9 @@ def load(path: Path | str) -> Roster:
                 crc2=str(one["crc2"]),
                 size=int(one["size"]),
                 game_code=str(one.get("game_code", "")),
-                title=str(one.get("title", "")),
+                internal_name=str(one.get("internal_name", "")),
+                region=str(one.get("region", "")),
+                version=int(one.get("version", 0)),
                 pinned_by=tuple(one.get("pinned_by", ())),
             )
             for one in raw.get("entries", ())
