@@ -326,12 +326,47 @@ which of two matching patches wins never arises.
 | `report` | Write the printable catalogue |
 | `vi` | Report the video configuration in each ROM, and edit it under guard |
 | `merge` | Fold a video change into a patch the game already needs |
+| `roster` | Pin which ROM belongs on which disk, by digest, and check a collection against it |
+| `resolve` | Find those ROMs in any pile, whatever they are named, and lay the disks out |
 | `artifacts` | Check the supplied-artifact folder against the manifest |
 | `payload` | Write the used prefix of an image, stamped with a serial for one disk |
 | `write` | Write an image to a Zip disk, verifying every chunk and watching the drive |
 | `db-update` | Download the save-type catalogue. The only command that uses the network |
 | `doctor` | Report what is installed, and check the supplied files against the manifest |
 | _no command_ | Run the guided flow: five questions, nothing written until you confirm |
+
+### Knowing you have the right ROMs
+
+A filename is a label somebody typed. Swap the bytes of `Banjo-Kazooie (USA) (Rev 1).z64` for the
+base revision and nothing downstream notices: the dump verifies its own internal checksum, the
+build writes it, and the only symptom is that the patch bound to Rev 1 silently fails to attach,
+because it binds on a checksum pair that no longer matches.
+
+`roster` records the digest of every ROM actually used, the name it came from, and the 8.3 name
+written to the disk. Where a patch pins the revision, `pinned_by` names that patch, so a hard
+requirement is never confused with a choice the collection happened to make.
+
+```console
+$ z64kit roster ~/roms roms.roster.json --write --patches patches
+written  roms.roster.json
+292 games, 51 with a revision a patch pins
+```
+
+`resolve` then works the other way. Point it at any pile of ROMs, at any depth, under any naming
+scheme, and it matches by content, lays the disks out, and reports what is absent with the digest
+to go and look for.
+
+```console
+$ z64kit resolve /some/unsorted/dump roms.roster.json --output ~/staging
+searching /some/unsorted/dump by content, 292 games wanted
+287 distinct ROMs found
+
+resolved       287 of 292
+
+missing        5, of which 2 break a patch
+  Zip Disk 02  Banjo-Kazooie (USA).z64
+               sha256 59875835...  pinned by banjo.zps
+```
 
 `organise` and `build` are two routes to the same layout. Folders are useful for copying to a disk
 by hand, for checking the naming before committing to an image, and for a drive the tool cannot

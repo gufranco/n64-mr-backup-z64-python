@@ -2725,3 +2725,245 @@ class TestWhatTheDoctorSaysAboutTheTexEngine:
 
         assert "none found" in out
         assert "install tectonic" in out
+
+
+class TestPinningWhichRomBelongsOnWhichDisk:
+    """A filename is a label somebody typed. These record and check the bytes."""
+
+    def collection(self, tmp_path, name="Banjo-Kazooie (USA).z64"):
+        from z64kit.conftest import make_rom
+
+        disk = tmp_path / "Zip Disk 01"
+        disk.mkdir(parents=True, exist_ok=True)
+        (disk / name).write_bytes(make_rom(size=1024 * 1024, title="BANJO"))
+        return tmp_path
+
+    def test_writing_it_records_every_game(self, capsys, tmp_path):
+        source = self.collection(tmp_path / "src")
+        target = tmp_path / "roms.roster.json"
+
+        code = cli.main(["roster", str(source), str(target), "--write"])
+
+        assert code == 0
+        assert "1 games" in capsys.readouterr().out
+        assert target.is_file()
+
+    def test_writing_it_twice_produces_an_identical_file(self, capsys, tmp_path):
+        source = self.collection(tmp_path / "src")
+        target = tmp_path / "roms.roster.json"
+
+        cli.main(["roster", str(source), str(target), "--write"])
+        first = target.read_text(encoding="utf-8")
+        cli.main(["roster", str(source), str(target), "--write"])
+
+        assert target.read_text(encoding="utf-8") == first
+        assert "unchanged" in capsys.readouterr().out
+
+    def test_an_unchanged_collection_checks_clean(self, capsys, tmp_path):
+        source = self.collection(tmp_path / "src")
+        target = tmp_path / "roms.roster.json"
+        cli.main(["roster", str(source), str(target), "--write"])
+        capsys.readouterr()
+
+        code = cli.main(["roster", str(source), str(target)])
+
+        assert code == 0
+        assert "byte for byte" in capsys.readouterr().out
+
+    def test_swapped_bytes_under_the_same_name_are_caught(self, capsys, tmp_path):
+        from z64kit.conftest import make_rom
+
+        source = self.collection(tmp_path / "src")
+        target = tmp_path / "roms.roster.json"
+        cli.main(["roster", str(source), str(target), "--write"])
+        rom = next((source / "Zip Disk 01").iterdir())
+        rom.write_bytes(make_rom(size=1024 * 1024, title="OTHER"))
+        capsys.readouterr()
+
+        code = cli.main(["roster", str(source), str(target)])
+
+        assert code == 1
+        out = capsys.readouterr().out
+        assert "wrong-bytes" in out or "wrong-revision" in out
+
+    def test_checking_without_a_roster_says_how_to_make_one(self, capsys, tmp_path):
+        source = self.collection(tmp_path / "src")
+
+        code = cli.main(["roster", str(source), str(tmp_path / "absent.json")])
+
+        assert code == 1
+        assert "--write" in capsys.readouterr().err
+
+
+class TestFindingTheRomsInAnyPile:
+    def pile(self, tmp_path):
+        from z64kit.conftest import make_rom
+
+        flat = tmp_path / "pile" / "deep" / "deeper"
+        flat.mkdir(parents=True)
+        (flat / "00000001.z64").write_bytes(make_rom(size=1024 * 1024, title="BANJO"))
+        return tmp_path / "pile"
+
+    def roster_for(self, tmp_path, capsys):
+        from z64kit.conftest import make_rom
+
+        curated = tmp_path / "curated" / "Zip Disk 01"
+        curated.mkdir(parents=True)
+        (curated / "Banjo-Kazooie (USA).z64").write_bytes(make_rom(size=1024 * 1024, title="BANJO"))
+        target = tmp_path / "roms.roster.json"
+        cli.main(["roster", str(tmp_path / "curated"), str(target), "--write"])
+        capsys.readouterr()
+        return target
+
+    def test_a_rom_under_a_meaningless_name_is_found_and_laid_out(self, capsys, tmp_path):
+        target = self.roster_for(tmp_path, capsys)
+        out = tmp_path / "laid-out"
+
+        code = cli.main(["resolve", str(self.pile(tmp_path)), str(target), "--output", str(out)])
+
+        assert code == 0
+        assert (out / "Zip Disk 01" / "Banjo-Kazooie (USA).z64").is_file()
+        assert "byte for byte" in capsys.readouterr().out
+
+    def test_laying_out_twice_changes_nothing(self, capsys, tmp_path):
+        target = self.roster_for(tmp_path, capsys)
+        pile = self.pile(tmp_path)
+        out = tmp_path / "laid-out"
+
+        cli.main(["resolve", str(pile), str(target), "--output", str(out)])
+        spot = out / "Zip Disk 01" / "Banjo-Kazooie (USA).z64"
+        before = spot.read_bytes()
+        cli.main(["resolve", str(pile), str(target), "--output", str(out)])
+
+        assert spot.read_bytes() == before
+
+    def test_a_pile_missing_a_game_reports_the_digest_to_hunt_for(self, capsys, tmp_path):
+        target = self.roster_for(tmp_path, capsys)
+        empty = tmp_path / "empty"
+        empty.mkdir()
+
+        code = cli.main(["resolve", str(empty), str(target)])
+
+        assert code == 1
+        assert "missing" in capsys.readouterr().out
+
+    def test_without_a_roster_it_says_how_to_make_one(self, capsys, tmp_path):
+        code = cli.main(["resolve", str(self.pile(tmp_path)), str(tmp_path / "absent.json")])
+
+        assert code == 1
+        assert "--write" in capsys.readouterr().err
+
+    def test_a_search_path_that_is_not_a_folder_is_refused(self, capsys, tmp_path):
+        target = self.roster_for(tmp_path, capsys)
+
+        code = cli.main(["resolve", str(tmp_path / "nope"), str(target)])
+
+        assert code == 1
+        assert "not a folder" in capsys.readouterr().err
+
+
+class TestReportingWhatTheBuildAndTheChecksPassedOver:
+    """Paths that only run when the inputs are untidy, which a clean collection
+    never reaches, so nothing else exercises them."""
+
+    def rom(self, path, title="BANJO", size=1024 * 1024):
+        from z64kit.conftest import make_rom
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(make_rom(size=size, title=title))
+        return path
+
+    def test_a_second_patch_that_loses_to_a_header_sidecar_is_named(
+        self, capsys, tmp_path, monkeypatch
+    ):
+        from z64kit import scan
+
+        source = tmp_path / "src" / "Zip Disk 01"
+        self.rom(source / "Banjo.z64")
+        patches = tmp_path / "patches"
+        patches.mkdir()
+
+        found = scan.scan(str(tmp_path / "src"))
+        game = found.games[0]
+        library = {
+            game.identity_key: [("strong", "ZPS", b"PATCHa")],
+            cli._pair_key(game): [("weaker", "APS", b"PATCHb")],
+        }
+        monkeypatch.setattr(cli, "_patch_library", lambda *a, **k: library)
+        monkeypatch.setattr(cli, "_patch_database", lambda *a, **k: None)
+
+        code = cli.main(
+            ["build", str(tmp_path / "src"), str(tmp_path / "out"), "--patches", str(patches)]
+        )
+
+        out = capsys.readouterr().out
+        assert code == 0
+        assert "weaker.aps" in out
+        assert "matched a header sidecar first" in out
+
+    def test_the_alternative_lookup_is_empty_when_nothing_stronger_matched(self, tmp_path):
+        from z64kit import scan
+
+        self.rom(tmp_path / "src" / "Zip Disk 01" / "Banjo.z64")
+        game = scan.scan(str(tmp_path / "src")).games[0]
+
+        assert cli._patch_alternatives({}, game) == []
+
+    def test_a_rom_whose_checksums_do_not_parse_yields_no_pair_key(self, tmp_path):
+        from z64kit import scan
+
+        self.rom(tmp_path / "src" / "Zip Disk 01" / "Banjo.z64")
+        game = scan.scan(str(tmp_path / "src")).games[0]
+
+        assert cli._pair_key(type(game)(**{**game.__dict__, "crc1": "zz"})) == b""
+
+    def test_files_the_roster_does_not_name_are_listed_when_checking(self, capsys, tmp_path):
+        source = tmp_path / "src"
+        self.rom(source / "Zip Disk 01" / "Banjo.z64")
+        target = tmp_path / "r.json"
+        cli.main(["roster", str(source), str(target), "--write"])
+        self.rom(source / "Zip Disk 01" / "Extra.z64", title="EXTRA")
+        capsys.readouterr()
+
+        cli.main(["roster", str(source), str(target)])
+
+        assert "not in roster" in capsys.readouterr().out
+
+    def test_a_pile_holding_more_than_the_roster_wants_says_so(self, capsys, tmp_path):
+        curated = tmp_path / "curated"
+        self.rom(curated / "Zip Disk 01" / "Banjo.z64")
+        target = tmp_path / "r.json"
+        cli.main(["roster", str(curated), str(target), "--write"])
+
+        pile = tmp_path / "pile"
+        self.rom(pile / "renamed.z64")
+        self.rom(pile / "spare.z64", title="SPARE")
+        capsys.readouterr()
+
+        code = cli.main(["resolve", str(pile), str(target)])
+
+        assert code == 0
+        assert "not needed" in capsys.readouterr().out
+
+    def test_laying_out_falls_back_to_copying_when_linking_is_refused(
+        self, capsys, tmp_path, monkeypatch
+    ):
+        """A search area and an output on different filesystems cannot be linked."""
+        curated = tmp_path / "curated"
+        self.rom(curated / "Zip Disk 01" / "Banjo.z64")
+        target = tmp_path / "r.json"
+        cli.main(["roster", str(curated), str(target), "--write"])
+        pile = tmp_path / "pile"
+        self.rom(pile / "renamed.z64")
+
+        def refuse(*_args: object) -> None:
+            raise OSError("cross-device link")
+
+        monkeypatch.setattr(cli.os, "link", refuse)
+        capsys.readouterr()
+        out = tmp_path / "laid"
+
+        code = cli.main(["resolve", str(pile), str(target), "--output", str(out)])
+
+        assert code == 0
+        assert (out / "Zip Disk 01" / "Banjo.z64").is_file()

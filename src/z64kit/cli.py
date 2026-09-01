@@ -22,7 +22,9 @@ import argparse
 import datetime
 import hashlib
 import json
+import os
 import secrets
+import shutil
 import struct
 import sys
 from dataclasses import dataclass
@@ -43,6 +45,7 @@ from . import (
     packing,
     patchdb,
     prompts,
+    roster,
     scan,
     videopatch,
     wizard,
@@ -102,6 +105,7 @@ class PatchFolderMissingError(FileNotFoundError):
 
 
 DATABASE_BASE, DATABASE_EXT = artifacts.PATCH_DATABASE.upper().split(".")
+DATABASE_SOURCE = artifacts.PATCH_DATABASE
 
 
 def _no_database_note() -> str:
@@ -204,11 +208,30 @@ def _patches_for(
     found = library.get(game.identity_key)
     if found is not None:
         return found
+    return library.get(_pair_key(game), [])
+
+
+def _pair_key(game: scan.Game) -> bytes:
     try:
-        pair = _crc_key(int(game.crc1, 16), int(game.crc2, 16))
+        return _crc_key(int(game.crc1, 16), int(game.crc2, 16))
     except ValueError:
+        return b""
+
+
+def _patch_alternatives(
+    library: dict[bytes, list[tuple[str, str, bytes]]], game: scan.Game
+) -> list[tuple[str, str, bytes]]:
+    """Patches that also bind this ROM but lose to a stronger match.
+
+    A `.hdr` sidecar pins all 64 header bytes and an APS pins only the checksum
+    pair, so when both exist the sidecar wins and the other is never written.
+    That is the right preference and it used to be invisible, which meant a
+    second patch could sit in the folder looking applied while nothing carried
+    it to a disk.
+    """
+    if library.get(game.identity_key) is None:
         return []
-    return library.get(pair, [])
+    return library.get(_pair_key(game), [])
 
 
 def _scan_or_exit(root: str) -> scan.Collection:
@@ -322,6 +345,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         print(_no_database_note())
 
     disks = []
+    passed_over: list[tuple[str, str]] = []
     for name, games in layout:
         volume = writer.Volume()
         placed = []
@@ -340,8 +364,11 @@ def cmd_build(args: argparse.Namespace) -> int:
             for stem, extension, blob in _patches_for(patches, game):
                 spot = volume.add_file(writer.ROOT, base, extension, blob)
                 placed.append({"source": f"{stem}.{extension.lower()}", "name": spot.name})
+            for stem, extension, _ in _patch_alternatives(patches, game):
+                passed_over.append((game.filename, f"{stem}.{extension.lower()}"))
         if database is not None:
-            volume.add_file(writer.ROOT, DATABASE_BASE, DATABASE_EXT, database)
+            spot = volume.add_file(writer.ROOT, DATABASE_BASE, DATABASE_EXT, database)
+            placed.append({"source": DATABASE_SOURCE, "name": spot.name, "lba": spot.start_lba})
         volume.sort_directories()
 
         failures = volume.verify()
@@ -360,7 +387,153 @@ def cmd_build(args: argparse.Namespace) -> int:
         json.dumps({"schema": 1, "generated": _today(), "disks": disks}, indent=1) + "\n",
         encoding="utf-8",
     )
+    if passed_over:
+        print(f"\n{len(passed_over)} patches bind a ROM that a stronger binding already claimed:")
+        for filename, patch in passed_over:
+            print(f"  {patch:22} not written, {filename} matched a header sidecar first")
+
     print(f"\n{len(disks)} images written to {out_dir}, manifest.json alongside them")
+    return 0
+
+
+def _roster_entries(found: scan.Collection, patch_folder: str | None) -> list[roster.Entry]:
+    """Build one entry per game, recording which patches pin its revision."""
+    names = _names(found)
+    library = _patch_library(patch_folder)
+    entries = []
+    for disk_name, games in _layout(found):
+        for game in sorted(games, key=lambda g: g.filename):
+            data = Path(game.path).read_bytes()
+            pinned = tuple(
+                sorted(
+                    f"{stem}.{extension.lower()}"
+                    for stem, extension, _ in _patches_for(library, game)
+                )
+            )
+            entries.append(
+                roster.Entry(
+                    disk=disk_name,
+                    source_name=game.filename,
+                    image_name=f"{names[game.filename]}.{game.true_extension}",
+                    sha256=roster.digest(data),
+                    crc1=game.crc1,
+                    crc2=game.crc2,
+                    size=game.size,
+                    game_code=game.game_code,
+                    title=game.internal_name,
+                    pinned_by=pinned,
+                )
+            )
+    return entries
+
+
+def cmd_roster(args: argparse.Namespace) -> int:
+    """Write the roster, or check a collection against one that already exists."""
+    found = _scan_or_exit(args.source)
+    target = Path(args.file)
+
+    if args.write:
+        built = roster.Roster(
+            generated=_today(),
+            entries=tuple(_roster_entries(found, getattr(args, "patches", None))),
+        )
+        text = roster.dumps(built)
+        unchanged = target.is_file() and target.read_text(encoding="utf-8") == text
+        target.write_text(text, encoding="utf-8")
+        pinned = len(built.pinned)
+        print(f"{'unchanged' if unchanged else 'written'}  {target}")
+        print(f"{len(built.entries)} games, {pinned} with a revision a patch pins")
+        return 0
+
+    if not target.is_file():
+        print(f"no roster at {target}. Write one first with --write", file=sys.stderr)
+        return 1
+
+    known = roster.load(target)
+    present = {game.filename: Path(game.path).read_bytes() for game in found.games}
+    report = roster.check(known, present)
+
+    print(f"roster         {target}, generated {known.generated}")
+    print(f"matched        {report.matched} of {len(known.entries)} by content")
+    for finding in report.findings:
+        print(f"  {finding.kind:14} {finding.entry.disk}  {finding.entry.source_name}")
+        print(f"  {'':14} {finding.detail}")
+    if report.extra:
+        print(f"  {'not in roster':14} {len(report.extra)} files")
+        for name in report.extra[:10]:
+            print(f"  {'':14} {name}")
+
+    if report.ok:
+        print("\nevery game the roster names is present, byte for byte.")
+        return 0
+    print("\nthe collection does not match the roster, so a build would write the wrong disk.")
+    return 1
+
+
+def _digest_tree(root: Path, rules: compat.Rules) -> dict[str, str]:
+    """Every ROM under `root`, indexed by digest.
+
+    Extensions decide what is read, never what it is. A file the index accepts is
+    identified afterwards by its bytes, so a wrong extension costs a wasted hash
+    rather than a wrong answer.
+    """
+    wanted = {one.lower() for one in rules.rom_extensions}
+    found: dict[str, str] = {}
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.suffix.lstrip(".").lower() not in wanted:
+            continue
+        found.setdefault(roster.digest(path.read_bytes()), str(path))
+    return found
+
+
+def cmd_resolve(args: argparse.Namespace) -> int:
+    """Lay out the disks the roster describes, from any pile of ROMs."""
+    target = Path(args.file)
+    if not target.is_file():
+        print(
+            f"no roster at {target}. Write one first with `z64kit roster --write`", file=sys.stderr
+        )
+        return 1
+
+    known = roster.load(target)
+    search = Path(args.source)
+    if not search.is_dir():
+        print(f"{search} is not a folder", file=sys.stderr)
+        return 1
+
+    print(f"searching {search} by content, {len(known.entries)} games wanted")
+    found = _digest_tree(search, compat.load_rules())
+    print(f"{len(found)} distinct ROMs found\n")
+    outcome = roster.resolve(known, found)
+
+    if args.output:
+        out_dir = Path(args.output)
+        for placement in outcome.placements:
+            disk = out_dir / placement.entry.disk
+            disk.mkdir(parents=True, exist_ok=True)
+            spot = disk / placement.entry.source_name
+            if spot.is_file() and roster.digest(spot.read_bytes()) == placement.entry.sha256:
+                continue
+            spot.unlink(missing_ok=True)
+            try:
+                os.link(placement.source, spot)
+            except OSError:
+                shutil.copyfile(placement.source, spot)
+        print(f"laid out {len(outcome.placements)} games under {out_dir}")
+
+    print(f"resolved       {len(outcome.placements)} of {len(known.entries)}")
+    if outcome.unused:
+        print(f"not needed     {len(outcome.unused)} files in the search area")
+    if outcome.missing:
+        pinned = outcome.missing_pinned
+        print(f"\nmissing        {len(outcome.missing)}, of which {len(pinned)} break a patch")
+        for one in outcome.missing:
+            mark = f"pinned by {', '.join(one.pinned_by)}" if one.required else "no patch pins it"
+            print(f"  {one.disk:12} {one.source_name}")
+            print(f"  {'':12} sha256 {one.sha256}  {mark}")
+        return 1
+
+    print("\nevery game the roster names was found, byte for byte.")
     return 0
 
 
@@ -1427,6 +1600,23 @@ def build_parser() -> argparse.ArgumentParser:
         "db-update", help="download the save-type catalogue, the only networked command"
     )
     dbu.set_defaults(func=cmd_db_update)
+
+    ros = subparsers.add_parser(
+        "roster", help="pin exactly which ROM belongs on which disk, by content"
+    )
+    ros.add_argument("source")
+    ros.add_argument("file", nargs="?", default="roms.roster.json")
+    ros.add_argument("--write", action="store_true", help="create or refresh it")
+    ros.add_argument("--patches", default=None, help="folder of patch files, to record what pins")
+    ros.set_defaults(func=cmd_roster)
+
+    res = subparsers.add_parser(
+        "resolve", help="find the right ROMs in any pile and lay out the disks"
+    )
+    res.add_argument("source", help="a folder to search, at any depth, in any naming scheme")
+    res.add_argument("file", nargs="?", default="roms.roster.json")
+    res.add_argument("--output", default=None, help="where to lay the disks out")
+    res.set_defaults(func=cmd_resolve)
 
     doc = subparsers.add_parser("doctor", help="report what is installed and what is missing")
     doc.add_argument(
