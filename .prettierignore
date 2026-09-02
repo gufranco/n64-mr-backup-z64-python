@@ -2,6 +2,12 @@ node_modules/
 patches/
 dist/
 sbom.json
+
+# Written by `z64kit roster --write`, whose serialisation is the guarantee that an
+# unchanged collection rewrites identical bytes. Prettier collapses short arrays
+# and json.dumps cannot, so letting both format this file means every regeneration
+# fights the check and every prettier run fights the generator.
+roms.roster.json
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
