@@ -18,11 +18,11 @@
 </div>
 
 <p align="center">
-  <a href="GUIDE.md"><strong>Step-by-step guide</strong></a> &nbsp;|&nbsp;
-  <a href="#quick-start">Quick start</a> &nbsp;|&nbsp;
-  <a href="#what-it-does">What it does</a> &nbsp;|&nbsp;
-  <a href="#the-video-patch-problem">Video patches</a> &nbsp;|&nbsp;
-  <a href="#no-copyrighted-content">No ROMs, ever</a> &nbsp;|&nbsp;
+  <a href="GUIDE.md"><strong>Step-by-step guide</strong></a> |
+  <a href="#quick-start">Quick start</a> |
+  <a href="#what-it-does">What it does</a> |
+  <a href="#the-video-patch-problem">Video patches</a> |
+  <a href="#no-copyrighted-content">No ROMs, ever</a> |
   <a href="#commands">Commands</a>
 </p>
 
