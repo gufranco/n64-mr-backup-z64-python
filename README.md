@@ -7,13 +7,11 @@
 <br>
 <br>
 
-[![CI](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml)
-[![Analysis](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/analysis.yml/badge.svg)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/analysis.yml)
-[![Scorecard](https://api.scorecard.dev/projects/github.com/gufranco/n64-mr-backup-z64-python/badge)](https://scorecard.dev/viewer/?uri=github.com/gufranco/n64-mr-backup-z64-python)
-[![Coverage](https://img.shields.io/badge/coverage-100%25%20statement%20%2B%20branch-brightgreen)](#running-the-tests)
-[![Tests](https://img.shields.io/badge/tests-1%2C225-brightgreen)](#running-the-tests)
-[![Types](https://img.shields.io/badge/mypy-strict-blue)](pyproject.toml)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE.txt)
+[![ci](https://img.shields.io/github/actions/workflow/status/gufranco/n64-mr-backup-z64-python/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/gufranco/n64-mr-backup-z64-python?style=flat-square&label=release)](https://github.com/gufranco/n64-mr-backup-z64-python/releases/latest)
+[![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square)](https://github.com/gufranco/n64-mr-backup-z64-python/actions/workflows/ci.yml)
+[![openssf scorecard](https://img.shields.io/ossf-scorecard/github.com/gufranco/n64-mr-backup-z64-python?style=flat-square&label=openssf%20scorecard)](https://scorecard.dev/viewer/?uri=github.com/gufranco/n64-mr-backup-z64-python)
+[![license](https://img.shields.io/github/license/gufranco/n64-mr-backup-z64-python?style=flat-square&label=license)](LICENSE.txt)
 
 </div>
 
